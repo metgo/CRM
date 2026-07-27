@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { X } from "lucide-react";
 import { COMMUNICATION_TYPE_LABELS } from "@/lib/utils/hebrew-status";
 import type { Client, Contact, CommunicationType } from "@/types/database";
@@ -31,13 +30,11 @@ export function LogCommunicationModal({
 
   useEffect(() => {
     const loadContacts = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("contacts")
-        .select("*")
-        .eq("client_id", client.id)
-        .is("deleted_at", null);
-      setContacts(data ?? []);
+      const res = await fetch(`/api/contacts?client_id=${client.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setContacts(data ?? []);
+      }
     };
     loadContacts();
   }, [client.id]);
@@ -47,37 +44,32 @@ export function LogCommunicationModal({
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const res = await fetch("/api/communications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: client.id,
+          contact_id: form.contact_id || null,
+          type: form.type,
+          direction: form.direction,
+          body: form.body,
+          status: "logged",
+        }),
+      });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("organization_id")
-      .eq("id", user.id)
-      .single();
+      if (!res.ok) {
+        setError("שגיאה בשמירת הרשומה");
+        setLoading(false);
+        return;
+      }
 
-    const { error } = await supabase.from("communications").insert({
-      client_id: client.id,
-      contact_id: form.contact_id || null,
-      user_id: user.id,
-      organization_id: profile?.organization_id ?? "",
-      type: form.type,
-      direction: form.direction,
-      body: form.body,
-      status: "logged",
-    });
-
-    if (error) {
+      router.refresh();
+      onClose();
+    } catch {
       setError("שגיאה בשמירת הרשומה");
       setLoading(false);
-      return;
     }
-
-    router.refresh();
-    onClose();
   };
 
   return (

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { SendMessageModal } from "@/components/features/communications/SendMessageModal";
 import { LogCommunicationModal } from "@/components/features/communications/LogCommunicationModal";
 import { ReminderModal } from "@/components/features/reminders/ReminderModal";

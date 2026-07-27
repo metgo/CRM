@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { X } from "lucide-react";
 import type { Client } from "@/types/database";
 
@@ -26,33 +25,30 @@ export function ReminderModal({ client, onClose }: ReminderModalProps) {
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const res = await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          notes: form.notes || null,
+          due_at: new Date(form.due_at).toISOString(),
+          client_id: client.id,
+        }),
+      });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("organization_id")
-      .eq("id", user.id)
-      .single();
+      if (!res.ok) {
+        setError("שגיאה בשמירת התזכורת");
+        setLoading(false);
+        return;
+      }
 
-    const { error } = await supabase.from("reminders").insert({
-      title: form.title,
-      notes: form.notes || null,
-      due_at: new Date(form.due_at).toISOString(),
-      client_id: client.id,
-      user_id: user.id,
-      organization_id: profile?.organization_id ?? "",
-    });
-
-    if (error) {
+      router.refresh();
+      onClose();
+    } catch {
       setError("שגיאה בשמירת התזכורת");
       setLoading(false);
-      return;
     }
-
-    router.refresh();
-    onClose();
   };
 
   return (

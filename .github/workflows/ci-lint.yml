@@ -1,0 +1,43 @@
+# This workflow checks eslint
+
+name: Lint
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+      - release/*
+  pull_request:
+    branches:
+      - dev
+      - main
+      - release/*
+
+env:
+  NODE_VERSION: 22.14.0
+
+jobs:
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v4
+
+      - name: Install NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Code Linting
+        run: yarn lint
+
+      - name: Fail if eslint made any changes
+        run: |
+          git --no-pager diff
+          [[ -z $(git status --untracked-files=no --porcelain) ]] && echo "running eslint made no changes"

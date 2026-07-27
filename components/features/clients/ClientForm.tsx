@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
   CLIENT_STATUS_LABELS,
   CLIENT_STATUSES,
@@ -41,37 +40,38 @@ export function ClientForm({ client, profiles, organizationId }: ClientFormProps
     setError("");
     setLoading(true);
 
-    const supabase = createSupabaseClient();
+    try {
+      const payload = {
+        name: form.name,
+        status: form.status,
+        region: form.region || null,
+        address: form.address || null,
+        website: form.website || null,
+        notes: form.notes || null,
+        assigned_to: form.assigned_to || null,
+      };
 
-    const payload = {
-      name: form.name,
-      status: form.status,
-      region: form.region || null,
-      address: form.address || null,
-      website: form.website || null,
-      notes: form.notes || null,
-      assigned_to: form.assigned_to || null,
-      organization_id: organizationId,
-    };
+      const url = isEdit ? `/api/clients/${client.id}` : "/api/clients";
+      const method = isEdit ? "PUT" : "POST";
 
-    let error;
-    if (isEdit) {
-      ({ error } = await supabase
-        .from("clients")
-        .update(payload)
-        .eq("id", client.id));
-    } else {
-      ({ error } = await supabase.from("clients").insert(payload));
-    }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (error) {
+      if (!res.ok) {
+        setError("שגיאה בשמירת הנתונים. נסה שוב.");
+        setLoading(false);
+        return;
+      }
+
+      router.push("/clients");
+      router.refresh();
+    } catch {
       setError("שגיאה בשמירת הנתונים. נסה שוב.");
       setLoading(false);
-      return;
     }
-
-    router.push("/clients");
-    router.refresh();
   };
 
   const update = (field: string, value: string) =>

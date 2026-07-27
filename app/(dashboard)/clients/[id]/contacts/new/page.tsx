@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getRepository, Client } from "@/lib/db";
 import { ContactForm } from "@/components/features/contacts/ContactForm";
 import { notFound, redirect } from "next/navigation";
 
@@ -8,14 +9,14 @@ interface Props {
 
 export default async function NewContactPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
-  const [{ data: client }, { data: profile }] = await Promise.all([
-    supabase.from("clients").select("id, name").eq("id", id).single(),
-    supabase.from("profiles").select("organization_id").eq("id", user.id).single(),
-  ]);
+  const clientRepo = await getRepository(Client);
+  const client = await clientRepo.findOne({
+    where: { id, organizationId: auth.payload.organizationId },
+    select: { id: true, name: true },
+  });
 
   if (!client) notFound();
 
@@ -27,7 +28,7 @@ export default async function NewContactPage({ params }: Props) {
       </div>
       <ContactForm
         clientId={id}
-        organizationId={profile?.organization_id ?? ""}
+        organizationId={auth.payload.organizationId}
       />
     </div>
   );

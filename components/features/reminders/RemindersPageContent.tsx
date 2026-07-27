@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Plus, Download, Check } from "lucide-react";
 import { exportToCSV } from "@/lib/utils/csv-export";
@@ -34,11 +33,11 @@ export function RemindersPageContent({
   });
 
   const markDone = async (id: string) => {
-    const supabase = createClient();
-    await supabase
-      .from("reminders")
-      .update({ is_done: true, done_at: new Date().toISOString() })
-      .eq("id", id);
+    await fetch(`/api/reminders/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_done: true, done_at: new Date().toISOString() }),
+    });
     setReminders((prev) =>
       prev.map((r) => (r.id === id ? { ...r, is_done: true } : r))
     );
@@ -47,22 +46,20 @@ export function RemindersPageContent({
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("reminders")
-      .insert({
+
+    const res = await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         title: newForm.title,
         notes: newForm.notes || null,
         due_at: new Date(newForm.due_at).toISOString(),
         client_id: newForm.client_id || null,
-        user_id: userId,
-        organization_id: organizationId,
-      })
-      .select("*, clients(id, name)")
-      .single();
+      }),
+    });
 
-    if (data) {
-      setReminders((prev) => [data as ReminderWithClient, ...prev]);
+    if (res.ok) {
+      router.refresh();
     }
     setShowAdd(false);
     setNewForm({ title: "", notes: "", due_at: "", client_id: "" });

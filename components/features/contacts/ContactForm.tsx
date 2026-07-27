@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import type { Contact } from "@/types/database";
 
 interface ContactFormProps {
@@ -36,36 +35,40 @@ export function ContactForm({ clientId, organizationId, contact }: ContactFormPr
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
+    try {
+      const payload = {
+        client_id: clientId,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        role_title: form.role_title || null,
+        phone: form.phone || null,
+        email: form.email || null,
+        whatsapp: form.whatsapp || null,
+        is_primary: form.is_primary,
+        notes: form.notes || null,
+      };
 
-    const payload = {
-      client_id: clientId,
-      organization_id: organizationId,
-      first_name: form.first_name,
-      last_name: form.last_name,
-      role_title: form.role_title || null,
-      phone: form.phone || null,
-      email: form.email || null,
-      whatsapp: form.whatsapp || null,
-      is_primary: form.is_primary,
-      notes: form.notes || null,
-    };
+      const url = isEdit ? `/api/contacts/${contact.id}` : "/api/contacts";
+      const method = isEdit ? "PUT" : "POST";
 
-    let error;
-    if (isEdit) {
-      ({ error } = await supabase.from("contacts").update(payload).eq("id", contact.id));
-    } else {
-      ({ error } = await supabase.from("contacts").insert(payload));
-    }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (error) {
+      if (!res.ok) {
+        setError("שגיאה בשמירת הנתונים");
+        setLoading(false);
+        return;
+      }
+
+      router.push(`/clients/${clientId}`);
+      router.refresh();
+    } catch {
       setError("שגיאה בשמירת הנתונים");
       setLoading(false);
-      return;
     }
-
-    router.push(`/clients/${clientId}`);
-    router.refresh();
   };
 
   return (

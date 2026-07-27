@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { ReminderWithClient } from "@/types/database";
 import { Plus } from "lucide-react";
@@ -20,11 +19,11 @@ export function RemindersList({ reminders: initial, clientId }: RemindersListPro
   const router = useRouter();
 
   const markDone = async (id: string) => {
-    const supabase = createClient();
-    await supabase
-      .from("reminders")
-      .update({ is_done: true, done_at: new Date().toISOString() })
-      .eq("id", id);
+    await fetch(`/api/reminders/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_done: true, done_at: new Date().toISOString() }),
+    });
     setReminders((prev) => prev.filter((r) => r.id !== id));
   };
 

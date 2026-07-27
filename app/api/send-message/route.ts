@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getRepository, Communication } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-
-  // Validate session
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const auth = await getCurrentUser();
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("organization_id, full_name")
-    .eq("id", user.id)
-    .single();
 
   const body = await request.json();
   const { type, to_phone, to_email, subject, body: messageBody, client_id, contact_id } = body;
@@ -64,12 +54,10 @@ export async function POST(request: NextRequest) {
           }
         );
         const text = await response.text();
-        // Extract message ID from INFORU response
         const match = text.match(/<Id>([^<]+)<\/Id>/);
         inforuMessageId = match?.[1] ?? null;
         status = response.ok ? "sent" : "failed";
       } else if (type === "email" && to_email) {
-        // INFORU email API - similar XML structure
         const xmlPayload = `<?xml version="1.0" encoding="UTF-8"?>
 <InforuXML>
   <User>
@@ -105,26 +93,29 @@ export async function POST(request: NextRequest) {
       status = "failed";
     }
   } else {
-    // No INFORU credentials - log as pending for demo
     status = "pending";
   }
 
   // Log communication to database
-  const { error: dbError } = await supabase.from("communications").insert({
-    client_id,
-    contact_id: contact_id ?? null,
-    user_id: user.id,
-    organization_id: profile?.organization_id ?? "",
+  const commRepo = await getRepository(Communication);
+  const communication = commRepo.create({
+    clientId: client_id,
+    contactId: contact_id ?? null,
+    userId: auth.payload.userId,
+    organizationId: auth.payload.organizationId,
     type,
     direction: "outbound",
     subject: subject ?? null,
     body: messageBody,
     status,
-    inforu_message_id: inforuMessageId,
-    sent_at: new Date().toISOString(),
+    inforuMessageId,
+    sentAt: new Date(),
   });
 
-  if (dbError) {
+  try {
+    await commRepo.save(communication);
+  } catch (error) {
+    console.error("Failed to save communication:", error);
     return NextResponse.json({ error: "Failed to save communication" }, { status: 500 });
   }
 

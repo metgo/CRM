@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
 import type { ReminderWithClient } from "@/types/database";
 
 export function useReminders() {
@@ -10,17 +9,14 @@ export function useReminders() {
   const [loading, setLoading] = useState(true);
 
   const fetchReminders = useCallback(async () => {
-    const supabase = createClient();
-    const now = new Date().toISOString();
-    const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    try {
+      const res = await fetch("/api/reminders");
+      if (!res.ok) return;
 
-    const { data } = await supabase
-      .from("reminders")
-      .select("*, clients(id, name)")
-      .eq("is_done", false)
-      .order("due_at", { ascending: true });
+      const data = await res.json();
+      const now = new Date().toISOString();
+      const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
-    if (data) {
       setOverdue(
         (data as ReminderWithClient[]).filter((r) => r.due_at < now)
       );
@@ -29,18 +25,25 @@ export function useReminders() {
           (r) => r.due_at >= now && r.due_at <= in48h
         )
       );
+    } catch {
+      // Ignore errors
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const markDone = useCallback(
     async (id: string) => {
-      const supabase = createClient();
-      await supabase
-        .from("reminders")
-        .update({ is_done: true, done_at: new Date().toISOString() })
-        .eq("id", id);
-      fetchReminders();
+      try {
+        await fetch(`/api/reminders/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_done: true }),
+        });
+        fetchReminders();
+      } catch {
+        // Ignore errors
+      }
     },
     [fetchReminders]
   );
