@@ -7,8 +7,8 @@ import {
   OneToMany,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Profile } from "./Profile";
-import type { Client } from "./Client";
+import { Profile } from "./Profile";
+import { Client } from "./Client";
 
 @Entity("organizations")
 export class Organization {
@@ -24,9 +24,9 @@ export class Organization {
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
 
-  @OneToMany("Profile", "organization")
+  @OneToMany(() => Profile, "organization")
   profiles: Relation<Profile[]>;
 
-  @OneToMany("Client", "organization")
+  @OneToMany(() => Client, "organization")
   clients: Relation<Client[]>;
 }

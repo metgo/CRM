@@ -10,9 +10,9 @@ import {
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Organization } from "./Organization";
-import type { Client } from "./Client";
-import type { Communication } from "./Communication";
+import { Organization } from "./Organization";
+import { Client } from "./Client";
+import { Communication } from "./Communication";
 
 @Entity("contacts")
 @Index(["clientId"])
@@ -60,14 +60,14 @@ export class Contact {
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
 
-  @ManyToOne("Organization")
+  @ManyToOne(() => Organization)
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
 
-  @ManyToOne("Client", "contacts")
+  @ManyToOne(() => Client, "contacts")
   @JoinColumn({ name: "client_id" })
   client: Relation<Client>;
 
-  @OneToMany("Communication", "contact")
+  @OneToMany(() => Communication, "contact")
   communications: Relation<Communication[]>;
 }

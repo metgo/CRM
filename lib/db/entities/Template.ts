@@ -9,8 +9,8 @@ import {
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Organization } from "./Organization";
-import type { Profile } from "./Profile";
+import { Organization } from "./Organization";
+import { Profile } from "./Profile";
 
 export type TemplateType = "sms" | "email" | "whatsapp";
 
@@ -47,11 +47,11 @@ export class Template {
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
 
-  @ManyToOne("Organization")
+  @ManyToOne(() => Organization)
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
 
-  @ManyToOne("Profile", { nullable: true })
+  @ManyToOne(() => Profile, { nullable: true })
   @JoinColumn({ name: "created_by" })
   createdBy: Relation<Profile> | null;
 }
