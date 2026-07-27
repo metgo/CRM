@@ -26,6 +26,14 @@ const nextConfig: NextConfig = {
         tedious: "commonjs tedious",
         typeorm: "commonjs typeorm",
       });
+
+      // TypeORM resolves string-based relations (e.g. @OneToMany("Profile", ...))
+      // by class name. Minifying the server bundle mangles those class names
+      // (Organization -> "s"), which breaks metadata building at runtime:
+      //   TypeORMError: Entity metadata for s#profiles was not found.
+      // Keep the server bundle unminified so the entity class names survive.
+      config.optimization = config.optimization || {};
+      config.optimization.minimize = false;
     }
     return config;
   },
