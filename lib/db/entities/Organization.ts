@@ -5,8 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  Relation,
 } from "typeorm";
+import type { Relation } from "typeorm";
 import type { Profile } from "./Profile";
 import type { Client } from "./Client";
 
