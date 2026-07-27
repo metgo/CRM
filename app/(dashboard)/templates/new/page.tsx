@@ -1,17 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { TemplateForm } from "@/components/features/templates/TemplateForm";
 import { redirect } from "next/navigation";
 
 export default async function NewTemplatePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("organization_id")
-    .eq("id", user.id)
-    .single();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
   return (
     <div className="space-y-6">
@@ -19,7 +12,7 @@ export default async function NewTemplatePage() {
         <h2 className="text-2xl font-bold text-gray-900">תבנית חדשה</h2>
         <p className="text-gray-500 mt-1">צור תבנית הודעה לשימוש חוזר</p>
       </div>
-      <TemplateForm organizationId={profile?.organization_id ?? ""} />
+      <TemplateForm organizationId={auth.payload.organizationId} />
     </div>
   );
 }

@@ -1,16 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -24,16 +17,16 @@ export default async function SettingsPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-gray-500">שם מלא</p>
-            <p className="font-medium text-gray-900 mt-0.5">{profile?.full_name ?? "—"}</p>
+            <p className="font-medium text-gray-900 mt-0.5">{auth.user.fullName}</p>
           </div>
           <div>
             <p className="text-gray-500">כתובת אימייל</p>
-            <p className="font-medium text-gray-900 mt-0.5 dir-ltr">{user.email}</p>
+            <p className="font-medium text-gray-900 mt-0.5 dir-ltr">{auth.user.email}</p>
           </div>
           <div>
             <p className="text-gray-500">תפקיד</p>
             <p className="font-medium text-gray-900 mt-0.5">
-              {profile?.role === "admin" ? "מנהל" : "סוכן"}
+              {auth.user.role === "admin" ? "מנהל" : "סוכן"}
             </p>
           </div>
         </div>

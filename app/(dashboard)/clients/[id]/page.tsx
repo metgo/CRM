@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import { getRepository, Client, Contact, Communication, Reminder } from "@/lib/db";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -13,7 +14,8 @@ import { ContactsList } from "@/components/features/contacts/ContactsList";
 import { ClientActions } from "@/components/features/clients/ClientActions";
 import { RemindersList } from "@/components/features/reminders/RemindersList";
 import { Pencil, Globe, MapPin, Calendar } from "lucide-react";
-import type { Client, Contact, ReminderWithClient, ClientStatus, CommunicationType } from "@/types/database";
+import type { ClientStatus, CommunicationType } from "@/types/database";
+import { IsNull } from "typeorm";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -21,40 +23,100 @@ interface Props {
 
 export default async function ClientDetailPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
-  const [{ data: client }, { data: contacts }, { data: communications }, { data: reminders }] =
-    await Promise.all([
-      supabase
-        .from("clients")
-        .select("*, profiles(full_name)")
-        .eq("id", id)
-        .is("deleted_at", null)
-        .single(),
-      supabase
-        .from("contacts")
-        .select("*")
-        .eq("client_id", id)
-        .is("deleted_at", null)
-        .order("is_primary", { ascending: false }),
-      supabase
-        .from("communications")
-        .select("*, contacts(first_name, last_name), profiles(full_name)")
-        .eq("client_id", id)
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("reminders")
-        .select("*, clients(name)")
-        .eq("client_id", id)
-        .eq("is_done", false)
-        .order("due_at", { ascending: true }),
-    ]);
+  const clientRepo = await getRepository(Client);
+  const contactRepo = await getRepository(Contact);
+  const commRepo = await getRepository(Communication);
+  const reminderRepo = await getRepository(Reminder);
+
+  const [client, contacts, communications, reminders] = await Promise.all([
+    clientRepo.findOne({
+      where: {
+        id,
+        organizationId: auth.payload.organizationId,
+        deletedAt: IsNull(),
+      },
+      relations: { assignedTo: true },
+    }),
+    contactRepo.find({
+      where: {
+        clientId: id,
+        organizationId: auth.payload.organizationId,
+        deletedAt: IsNull(),
+      },
+      order: { isPrimary: "DESC", createdAt: "DESC" },
+    }),
+    commRepo.find({
+      where: {
+        clientId: id,
+        organizationId: auth.payload.organizationId,
+      },
+      relations: { contact: true, user: true },
+      order: { createdAt: "DESC" },
+      take: 20,
+    }),
+    reminderRepo.find({
+      where: {
+        clientId: id,
+        organizationId: auth.payload.organizationId,
+        isDone: false,
+      },
+      relations: { client: true },
+      order: { dueAt: "ASC" },
+    }),
+  ]);
 
   if (!client) notFound();
-  const typedClient = client as Client & { profiles: { full_name: string } | null };
-  const typedContacts = (contacts ?? []) as Contact[];
-  const typedReminders = (reminders ?? []) as ReminderWithClient[];
+
+  const typedClient = {
+    id: client.id,
+    organization_id: client.organizationId,
+    name: client.name,
+    status: client.status as ClientStatus,
+    region: client.region,
+    address: client.address,
+    website: client.website,
+    notes: client.notes,
+    assigned_to: client.assignedToId,
+    deleted_at: client.deletedAt?.toISOString() ?? null,
+    created_at: client.createdAt.toISOString(),
+    updated_at: client.updatedAt.toISOString(),
+    profiles: client.assignedTo ? { full_name: client.assignedTo.fullName } : null,
+  };
+
+  const typedContacts = contacts.map((c) => ({
+    id: c.id,
+    organization_id: c.organizationId,
+    client_id: c.clientId,
+    first_name: c.firstName,
+    last_name: c.lastName,
+    role_title: c.roleTitle,
+    phone: c.phone,
+    email: c.email,
+    whatsapp: c.whatsapp,
+    is_primary: c.isPrimary,
+    notes: c.notes,
+    deleted_at: c.deletedAt?.toISOString() ?? null,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt.toISOString(),
+  }));
+
+  const typedReminders = reminders.map((r) => ({
+    id: r.id,
+    organization_id: r.organizationId,
+    user_id: r.userId,
+    client_id: r.clientId,
+    title: r.title,
+    notes: r.notes,
+    due_at: r.dueAt.toISOString(),
+    is_done: r.isDone,
+    done_at: r.doneAt?.toISOString() ?? null,
+    created_at: r.createdAt.toISOString(),
+    updated_at: r.updatedAt.toISOString(),
+    clients: r.client ? { id: r.client.id, name: r.client.name } : null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -65,9 +127,9 @@ export default async function ClientDetailPage({ params }: Props) {
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-bold text-gray-900">{typedClient.name}</h2>
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${CLIENT_STATUS_COLORS[typedClient.status as ClientStatus]}`}
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${CLIENT_STATUS_COLORS[typedClient.status]}`}
               >
-                {CLIENT_STATUS_LABELS[typedClient.status as ClientStatus]}
+                {CLIENT_STATUS_LABELS[typedClient.status]}
               </span>
             </div>
 
@@ -124,11 +186,11 @@ export default async function ClientDetailPage({ params }: Props) {
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">היסטוריית תקשורת</h3>
               <span className="text-sm text-gray-500">
-                {communications?.length ?? 0} רשומות
+                {communications.length} רשומות
               </span>
             </div>
             <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-              {!communications?.length ? (
+              {!communications.length ? (
                 <div className="p-8 text-center text-gray-400 text-sm">
                   אין רשומות תקשורת עדיין
                 </div>
@@ -144,15 +206,15 @@ export default async function ClientDetailPage({ params }: Props) {
                           <span className="text-sm font-medium text-gray-900">
                             {COMMUNICATION_TYPE_LABELS[comm.type as CommunicationType]}
                           </span>
-                          {comm.contacts && (
+                          {comm.contact && (
                             <span className="text-xs text-gray-500">
-                              עם {comm.contacts.first_name}{" "}
-                              {comm.contacts.last_name}
+                              עם {comm.contact.firstName}{" "}
+                              {comm.contact.lastName}
                             </span>
                           )}
                           <span className="text-xs text-gray-400 mr-auto">
                             {format(
-                              new Date(comm.created_at),
+                              new Date(comm.createdAt),
                               "dd/MM/yyyy HH:mm",
                               { locale: he }
                             )}
@@ -166,9 +228,9 @@ export default async function ClientDetailPage({ params }: Props) {
                         <p className="text-sm text-gray-600 whitespace-pre-wrap">
                           {comm.body}
                         </p>
-                        {comm.profiles && (
+                        {comm.user && (
                           <p className="text-xs text-gray-400 mt-1">
-                            על ידי: {comm.profiles.full_name}
+                            על ידי: {comm.user.fullName}
                           </p>
                         )}
                       </div>

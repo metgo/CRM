@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { X, Send } from "lucide-react";
 import { TEMPLATE_TYPE_LABELS } from "@/lib/utils/hebrew-status";
 import { parseTemplate } from "@/lib/utils/template-parser";
@@ -30,17 +29,18 @@ export function SendMessageModal({ client, onClose }: SendMessageModalProps) {
 
   useEffect(() => {
     const load = async () => {
-      const supabase = createClient();
-      const [{ data: c }, { data: t }] = await Promise.all([
-        supabase
-          .from("contacts")
-          .select("*")
-          .eq("client_id", client.id)
-          .is("deleted_at", null),
-        supabase.from("templates").select("*").order("name"),
+      const [contactsRes, templatesRes] = await Promise.all([
+        fetch(`/api/contacts?client_id=${client.id}`),
+        fetch("/api/templates"),
       ]);
-      setContacts(c ?? []);
-      setTemplates(t ?? []);
+      if (contactsRes.ok) {
+        const c = await contactsRes.json();
+        setContacts(c ?? []);
+      }
+      if (templatesRes.ok) {
+        const t = await templatesRes.json();
+        setTemplates(t ?? []);
+      }
     };
     load();
   }, [client.id]);

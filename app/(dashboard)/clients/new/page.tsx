@@ -1,23 +1,23 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getRepository, Profile } from "@/lib/db";
 import { ClientForm } from "@/components/features/clients/ClientForm";
 import { redirect } from "next/navigation";
 
 export default async function NewClientPage() {
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const profileRepo = await getRepository(Profile);
+  const profiles = await profileRepo.find({
+    where: { organizationId: auth.payload.organizationId },
+    select: { id: true, fullName: true },
+    order: { fullName: "ASC" },
+  });
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("organization_id")
-    .eq("id", user.id)
-    .single();
-
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name")
-    .eq("organization_id", profile?.organization_id ?? "");
+  const profilesData = profiles.map((p) => ({
+    id: p.id,
+    full_name: p.fullName,
+  }));
 
   return (
     <div className="space-y-6">
@@ -26,8 +26,8 @@ export default async function NewClientPage() {
         <p className="text-gray-500 mt-1">הוסף מועצה אזורית חדשה למערכת</p>
       </div>
       <ClientForm
-        profiles={(profiles ?? []) as any}
-        organizationId={profile?.organization_id ?? ""}
+        profiles={profilesData}
+        organizationId={auth.payload.organizationId}
       />
     </div>
   );

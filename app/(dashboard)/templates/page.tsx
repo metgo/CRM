@@ -1,4 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getRepository, Template } from "@/lib/db";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, FileText } from "lucide-react";
 import { TEMPLATE_TYPE_LABELS } from "@/lib/utils/hebrew-status";
@@ -6,19 +8,21 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 
 export default async function TemplatesPage() {
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
-  const { data: templates } = await supabase
-    .from("templates")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const templateRepo = await getRepository(Template);
+  const templates = await templateRepo.find({
+    where: { organizationId: auth.payload.organizationId },
+    order: { createdAt: "DESC" },
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">תבניות הודעה</h2>
-          <p className="text-gray-500 mt-1">{templates?.length ?? 0} תבניות</p>
+          <p className="text-gray-500 mt-1">{templates.length} תבניות</p>
         </div>
         <Link
           href="/templates/new"
@@ -29,7 +33,7 @@ export default async function TemplatesPage() {
         </Link>
       </div>
 
-      {!templates?.length ? (
+      {!templates.length ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500">אין תבניות עדיין</p>
@@ -58,7 +62,7 @@ export default async function TemplatesPage() {
                 )}
                 <p className="text-sm text-gray-500 line-clamp-3">{t.body}</p>
                 <p className="text-xs text-gray-400 mt-3">
-                  {format(new Date(t.created_at), "dd/MM/yyyy", { locale: he })}
+                  {format(new Date(t.createdAt), "dd/MM/yyyy", { locale: he })}
                 </p>
               </div>
             </Link>

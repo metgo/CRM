@@ -2,13 +2,11 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { TEMPLATE_VARIABLES, parseTemplate } from "@/lib/utils/template-parser";
 import { TEMPLATE_TYPE_LABELS } from "@/lib/utils/hebrew-status";
 import type { Template, TemplateType } from "@/types/database";
 import { Trash2 } from "lucide-react";
 
-// re-export for use in the form
 const TYPES: TemplateType[] = ["sms", "email", "whatsapp"];
 
 interface TemplateFormProps {
@@ -59,45 +57,51 @@ export function TemplateForm({ template, organizationId }: TemplateFormProps) {
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const payload = {
+        name: form.name,
+        type: form.type,
+        subject: form.subject || null,
+        body: form.body,
+        variables: TEMPLATE_VARIABLES
+          .filter((v) => form.body.includes(v.key))
+          .map((v) => v.key),
+      };
 
-    const payload = {
-      name: form.name,
-      type: form.type,
-      subject: form.subject || null,
-      body: form.body,
-      organization_id: organizationId,
-      variables: TEMPLATE_VARIABLES
-        .filter((v) => form.body.includes(v.key))
-        .map((v) => v.key),
-      created_by: user?.id,
-    };
+      const url = isEdit ? `/api/templates/${template.id}` : "/api/templates";
+      const method = isEdit ? "PUT" : "POST";
 
-    let error;
-    if (isEdit) {
-      ({ error } = await supabase.from("templates").update(payload).eq("id", template.id));
-    } else {
-      ({ error } = await supabase.from("templates").insert(payload));
-    }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (error) {
+      if (!res.ok) {
+        setError("שגיאה בשמירת התבנית");
+        setLoading(false);
+        return;
+      }
+
+      router.push("/templates");
+      router.refresh();
+    } catch {
       setError("שגיאה בשמירת התבנית");
       setLoading(false);
-      return;
     }
-
-    router.push("/templates");
-    router.refresh();
   };
 
   const handleDelete = async () => {
     if (!confirm("האם למחוק את התבנית?")) return;
     setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("templates").delete().eq("id", template!.id);
-    router.push("/templates");
-    router.refresh();
+
+    try {
+      await fetch(`/api/templates/${template!.id}`, { method: "DELETE" });
+      router.push("/templates");
+      router.refresh();
+    } catch {
+      setDeleting(false);
+    }
   };
 
   return (

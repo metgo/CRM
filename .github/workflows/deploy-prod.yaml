@@ -1,0 +1,66 @@
+name: Build & Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set SHA
+        id: sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Docker Login
+        run: docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create .env file
+        run: echo "${{ secrets.CRM_PROD_ENV }}" | base64 -d > .env.local
+
+      - name: Build & Push
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/metgo-crm:latest-${{ steps.sha.outputs.short_sha }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/metgo-crm:latest \
+            .
+
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/metgo-crm:latest-${{ steps.sha.outputs.short_sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/metgo-crm:latest
+
+      - name: Clean up .env
+        if: always()
+        run: rm -f .env.local
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Deploy via SSH
+        uses: fifsky/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_PROD_IP }}
+          user: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          options: '-o StrictHostKeyChecking=no'
+          command: |
+            cd ~/app
+
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+            # Pull latest image
+            docker compose pull crm
+
+            # Zero-downtime style restart
+            docker compose up -d --no-deps crm
+
+            # Cleanup
+            docker image prune -f

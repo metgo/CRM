@@ -1,4 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getRepository, Communication } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import {
@@ -7,22 +9,23 @@ import {
 } from "@/lib/utils/hebrew-status";
 
 export default async function CommunicationsPage() {
-  const supabase = await createClient();
+  const auth = await getCurrentUser();
+  if (!auth) redirect("/login");
 
-  const { data: communications } = await supabase
-    .from("communications")
-    .select(
-      "*, clients(name), contacts(first_name, last_name), profiles(full_name)"
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const commRepo = await getRepository(Communication);
+  const communications = await commRepo.find({
+    where: { organizationId: auth.payload.organizationId },
+    relations: { client: true, contact: true, user: true },
+    order: { createdAt: "DESC" },
+    take: 100,
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">היסטוריית תקשורת</h2>
         <p className="text-gray-500 mt-1">
-          {communications?.length ?? 0} רשומות
+          {communications.length} רשומות
         </p>
       </div>
 
@@ -41,14 +44,14 @@ export default async function CommunicationsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {!communications?.length ? (
+              {!communications.length ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">
                     אין רשומות תקשורת
                   </td>
                 </tr>
               ) : (
-                communications.map((comm: any) => (
+                communications.map((comm) => (
                   <tr key={comm.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -58,18 +61,18 @@ export default async function CommunicationsPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{comm.clients?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{comm.client?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {comm.contacts
-                        ? `${comm.contacts.first_name} ${comm.contacts.last_name}`
+                      {comm.contact
+                        ? `${comm.contact.firstName} ${comm.contact.lastName}`
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-sm text-gray-600 truncate max-w-48">{comm.body}</p>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{comm.profiles?.full_name ?? "—"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{comm.user?.fullName ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                      {format(new Date(comm.created_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                      {format(new Date(comm.createdAt), "dd/MM/yyyy HH:mm", { locale: he })}
                     </td>
                     <td className="px-4 py-3">
                       {comm.status && (
