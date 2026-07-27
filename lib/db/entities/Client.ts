@@ -8,8 +8,8 @@ import {
   JoinColumn,
   OneToMany,
   Index,
-  Relation,
 } from "typeorm";
+import type { Relation } from "typeorm";
 import type { Organization } from "./Organization";
 import type { Profile } from "./Profile";
 import type { Contact } from "./Contact";

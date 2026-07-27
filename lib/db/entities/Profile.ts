@@ -7,8 +7,8 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
-  Relation,
 } from "typeorm";
+import type { Relation } from "typeorm";
 import type { Organization } from "./Organization";
 import type { Client } from "./Client";
 import type { Communication } from "./Communication";
