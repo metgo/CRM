@@ -9,9 +9,9 @@ import {
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Organization } from "./Organization";
-import type { Profile } from "./Profile";
-import type { Client } from "./Client";
+import { Organization } from "./Organization";
+import { Profile } from "./Profile";
+import { Client } from "./Client";
 
 @Entity("reminders")
 @Index(["userId", "dueAt", "isDone"])
@@ -49,15 +49,15 @@ export class Reminder {
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
 
-  @ManyToOne("Organization")
+  @ManyToOne(() => Organization)
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
 
-  @ManyToOne("Profile", "reminders")
+  @ManyToOne(() => Profile, "reminders")
   @JoinColumn({ name: "user_id" })
   user: Relation<Profile>;
 
-  @ManyToOne("Client", "reminders", { nullable: true })
+  @ManyToOne(() => Client, "reminders", { nullable: true })
   @JoinColumn({ name: "client_id" })
   client: Relation<Client> | null;
 }

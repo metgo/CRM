@@ -9,10 +9,10 @@ import {
   OneToMany,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Organization } from "./Organization";
-import type { Client } from "./Client";
-import type { Communication } from "./Communication";
-import type { Reminder } from "./Reminder";
+import { Organization } from "./Organization";
+import { Client } from "./Client";
+import { Communication } from "./Communication";
+import { Reminder } from "./Reminder";
 
 export type UserRole = "admin" | "agent";
 
@@ -42,16 +42,16 @@ export class Profile {
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
 
-  @ManyToOne("Organization", "profiles")
+  @ManyToOne(() => Organization, "profiles")
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
 
-  @OneToMany("Client", "assignedTo")
+  @OneToMany(() => Client, "assignedTo")
   assignedClients: Relation<Client[]>;
 
-  @OneToMany("Communication", "user")
+  @OneToMany(() => Communication, "user")
   communications: Relation<Communication[]>;
 
-  @OneToMany("Reminder", "user")
+  @OneToMany(() => Reminder, "user")
   reminders: Relation<Reminder[]>;
 }

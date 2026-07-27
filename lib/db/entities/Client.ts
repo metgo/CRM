@@ -10,11 +10,11 @@ import {
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Organization } from "./Organization";
-import type { Profile } from "./Profile";
-import type { Contact } from "./Contact";
-import type { Communication } from "./Communication";
-import type { Reminder } from "./Reminder";
+import { Organization } from "./Organization";
+import { Profile } from "./Profile";
+import { Contact } from "./Contact";
+import { Communication } from "./Communication";
+import { Reminder } from "./Reminder";
 
 export type ClientStatus = "lead" | "active" | "negotiation" | "paused" | "closed";
 
@@ -59,20 +59,20 @@ export class Client {
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt: Date;
 
-  @ManyToOne("Organization", "clients")
+  @ManyToOne(() => Organization, "clients")
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
 
-  @ManyToOne("Profile", "assignedClients", { nullable: true })
+  @ManyToOne(() => Profile, "assignedClients", { nullable: true })
   @JoinColumn({ name: "assigned_to" })
   assignedTo: Relation<Profile> | null;
 
-  @OneToMany("Contact", "client")
+  @OneToMany(() => Contact, "client")
   contacts: Relation<Contact[]>;
 
-  @OneToMany("Communication", "client")
+  @OneToMany(() => Communication, "client")
   communications: Relation<Communication[]>;
 
-  @OneToMany("Reminder", "client")
+  @OneToMany(() => Reminder, "client")
   reminders: Relation<Reminder[]>;
 }

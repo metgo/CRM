@@ -8,10 +8,10 @@ import {
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
-import type { Organization } from "./Organization";
-import type { Client } from "./Client";
-import type { Contact } from "./Contact";
-import type { Profile } from "./Profile";
+import { Organization } from "./Organization";
+import { Client } from "./Client";
+import { Contact } from "./Contact";
+import { Profile } from "./Profile";
 
 export type CommunicationType = "sms" | "email" | "whatsapp" | "call" | "meeting" | "note";
 export type CommunicationDirection = "outbound" | "inbound";
@@ -60,19 +60,19 @@ export class Communication {
   @CreateDateColumn({ name: "created_at" })
   createdAt: Date;
 
-  @ManyToOne("Organization")
+  @ManyToOne(() => Organization)
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
 
-  @ManyToOne("Client", "communications")
+  @ManyToOne(() => Client, "communications")
   @JoinColumn({ name: "client_id" })
   client: Relation<Client>;
 
-  @ManyToOne("Contact", "communications", { nullable: true })
+  @ManyToOne(() => Contact, "communications", { nullable: true })
   @JoinColumn({ name: "contact_id" })
   contact: Relation<Contact> | null;
 
-  @ManyToOne("Profile", "communications")
+  @ManyToOne(() => Profile, "communications")
   @JoinColumn({ name: "user_id" })
   user: Relation<Profile>;
 }
