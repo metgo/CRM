@@ -24,14 +24,36 @@ export class Contact {
   @Column({ name: "organization_id", type: "uuid" })
   organizationId: string;
 
-  @Column({ name: "client_id", type: "uuid" })
+  // DB column is nullable since AddMetgoCrm (mc contacts link via `links` jsonb).
+  @Column({ name: "client_id", type: "uuid", nullable: true })
   clientId: string;
 
-  @Column({ name: "first_name", type: "varchar", length: 100 })
+  // DB columns are nullable since AddMetgoCrm; the mc API mirrors them from name_he.
+  @Column({ name: "first_name", type: "varchar", length: 100, nullable: true })
   firstName: string;
 
-  @Column({ name: "last_name", type: "varchar", length: 100 })
+  @Column({ name: "last_name", type: "varchar", length: 100, nullable: true })
   lastName: string;
+
+  // --- metgo-crm bilingual fields (all nullable, added by AddMetgoCrm migration) ---
+  @Column({ name: "name_he", type: "text", nullable: true })
+  nameHe: string | null;
+
+  @Column({ name: "name_en", type: "text", nullable: true })
+  nameEn: string | null;
+
+  @Column({ type: "text", nullable: true })
+  mobile: string | null;
+
+  @Column({ type: "text", nullable: true })
+  channel: string | null;
+
+  @Column({ type: "jsonb", default: () => "'[]'" })
+  links: unknown;
+
+  @Column({ type: "boolean", default: true })
+  active: boolean;
+  // --- end metgo-crm fields ---
 
   @Column({ name: "role_title", type: "varchar", length: 150, nullable: true })
   roleTitle: string | null;

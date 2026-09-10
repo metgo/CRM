@@ -7,6 +7,7 @@ import { Contact } from "./entities/Contact";
 import { Communication } from "./entities/Communication";
 import { Template } from "./entities/Template";
 import { Reminder } from "./entities/Reminder";
+import { MC_ENTITIES } from "./entities/mc";
 
 const baseConfig: DataSourceOptions = {
   type: "postgres",
@@ -23,6 +24,7 @@ const baseConfig: DataSourceOptions = {
     Communication,
     Template,
     Reminder,
+    ...MC_ENTITIES,
   ],
   migrations: [],
   subscribers: [],
@@ -30,6 +32,9 @@ const baseConfig: DataSourceOptions = {
 
 export const AppDataSource = new DataSource({
   ...baseConfig,
-  synchronize: process.env.NODE_ENV === "development",
+  // Schema is owned by migrations (yarn migration:run). Auto-synchronize is off
+  // so the metgo-crm tables and the altered clients/contacts columns are only
+  // ever changed through a reviewed migration.
+  synchronize: false,
   logging: process.env.NODE_ENV === "development",
 });
