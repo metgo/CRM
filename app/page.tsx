@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation";
+import "./mc.css";
+import McApp from "@/components/mc/McApp";
+
+export const metadata = {
+  title: "Metgo CRM — Operations",
+};
 
 export default function Home() {
-  redirect("/dashboard");
+  return <McApp />;
 }

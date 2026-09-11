@@ -12,9 +12,7 @@ import { Organization } from "../lib/db/entities/Organization";
 import { Profile } from "../lib/db/entities/Profile";
 import { Client } from "../lib/db/entities/Client";
 import { Contact } from "../lib/db/entities/Contact";
-import { Communication } from "../lib/db/entities/Communication";
-import { Template } from "../lib/db/entities/Template";
-import { Reminder } from "../lib/db/entities/Reminder";
+import { MC_ENTITIES } from "../lib/db/entities/mc";
 
 async function loadMigrations() {
   const migrationsDir = path.join(__dirname, "../lib/db/migrations");
@@ -51,9 +49,7 @@ async function runMigration() {
       Profile,
       Client,
       Contact,
-      Communication,
-      Template,
-      Reminder,
+      ...MC_ENTITIES,
     ],
     migrations: migrations as any[],
     synchronize: false,
