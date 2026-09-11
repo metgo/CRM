@@ -13,8 +13,6 @@ import type { Relation } from "typeorm";
 import { Organization } from "./Organization";
 import { Profile } from "./Profile";
 import { Contact } from "./Contact";
-import { Communication } from "./Communication";
-import { Reminder } from "./Reminder";
 
 export type ClientStatus = "lead" | "active" | "negotiation" | "paused" | "closed";
 
@@ -109,10 +107,4 @@ export class Client {
 
   @OneToMany(() => Contact, "client")
   contacts: Relation<Contact[]>;
-
-  @OneToMany(() => Communication, "client")
-  communications: Relation<Communication[]>;
-
-  @OneToMany(() => Reminder, "client")
-  reminders: Relation<Reminder[]>;
 }

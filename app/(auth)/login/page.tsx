@@ -30,7 +30,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/");
       router.refresh();
     } catch {
       setError("שגיאה בחיבור לשרת");

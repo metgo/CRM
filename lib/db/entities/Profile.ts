@@ -11,8 +11,6 @@ import {
 import type { Relation } from "typeorm";
 import { Organization } from "./Organization";
 import { Client } from "./Client";
-import { Communication } from "./Communication";
-import { Reminder } from "./Reminder";
 
 export type UserRole = "admin" | "agent";
 
@@ -48,10 +46,4 @@ export class Profile {
 
   @OneToMany(() => Client, "assignedTo")
   assignedClients: Relation<Client[]>;
-
-  @OneToMany(() => Communication, "user")
-  communications: Relation<Communication[]>;
-
-  @OneToMany(() => Reminder, "user")
-  reminders: Relation<Reminder[]>;
 }

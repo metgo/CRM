@@ -56,23 +56,7 @@ const NAV_GROUPS: Array<{ group: string; items: NavItem[] }> = [
       { id: "events", icon: "★" }
     ]
   },
-  { group: "g_system", items: [{ id: "partners", icon: "⚯" }, { id: "automations", icon: "⚡" }, { id: "reports", icon: "▥" }, { id: "settings", icon: "⚙" }] },
-  {
-    group: "g_messaging",
-    items: [
-      { id: "communications", icon: "✉", href: "/communications" },
-      { id: "templates", icon: "❏", href: "/templates" },
-      { id: "reminders", icon: "⏰", href: "/reminders" }
-    ]
-  },
-  {
-    group: "g_classic",
-    items: [
-      { id: "classicDashboard", icon: "▤", href: "/dashboard" },
-      { id: "classicClients", icon: "◉", href: "/clients" },
-      { id: "classicContacts", icon: "☏", href: "/contacts" }
-    ]
-  }
+  { group: "g_system", items: [{ id: "partners", icon: "⚯" }, { id: "automations", icon: "⚡" }, { id: "reports", icon: "▥" }, { id: "settings", icon: "⚙" }] }
 ];
 
 type PageId = "dashboard" | "vouchers" | "automations" | "reports" | "settings" | "search";
