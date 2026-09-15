@@ -12,6 +12,8 @@ import { Organization } from "../lib/db/entities/Organization";
 import { Profile } from "../lib/db/entities/Profile";
 import { Client } from "../lib/db/entities/Client";
 import { Contact } from "../lib/db/entities/Contact";
+import { AuthToken } from "../lib/db/entities/AuthToken";
+import { AuthEvent } from "../lib/db/entities/AuthEvent";
 import { MC_ENTITIES } from "../lib/db/entities/mc";
 
 async function loadMigrations() {
@@ -49,6 +51,8 @@ async function runMigration() {
       Profile,
       Client,
       Contact,
+      AuthToken,
+      AuthEvent,
       ...MC_ENTITIES,
     ],
     migrations: migrations as any[],

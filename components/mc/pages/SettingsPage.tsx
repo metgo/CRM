@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { COLLECTIONS, getSettings, rows, save, useMcStore, type CollName } from "@/lib/mc/store";
+import { useCurrentUser } from "@/lib/mc/currentUser";
 import { SCHEMA } from "@/lib/mc/schema";
 import { L, t } from "@/lib/mc/i18n";
 import { DataTable } from "../DataTable";
@@ -24,8 +25,17 @@ export function SettingsPage({
   onOpen, onToast
 }: { onOpen: (t: { coll: CollName; id: string | null }) => void; onToast: (m: string) => void }) {
   useMcStore();
+  const currentUser = useCurrentUser();
   const [draft, setDraft] = useState<Record<string, number>>({ ...(getSettings() as any) });
   const [busy, setBusy] = useState(false);
+
+  if (currentUser !== undefined && currentUser?.role !== "superadmin") {
+    return (
+      <div className="card" style={{ padding: "14px 18px" }}>
+        {L({ he: "הגישה להגדרות מוגבלת למנהלי-על בלבד.", en: "Settings access is restricted to superadmins." })}
+      </div>
+    );
+  }
 
   const saveSettings = async () => {
     setBusy(true);

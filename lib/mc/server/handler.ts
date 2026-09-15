@@ -7,6 +7,17 @@ import { MC_REGISTRY, isMcCollection } from "./registry";
 
 const READ_ONLY_KEYS = new Set(["id", "createdAt", "updatedAt"]);
 
+// Settings (org parameters + the team directory) are gated to superadmins;
+// every other mc collection stays open to any authenticated org member.
+const SUPERADMIN_ONLY = new Set(["settings", "users"]);
+
+function forbiddenIfNotSuperadmin(coll: string, role: string): NextResponse | null {
+  if (SUPERADMIN_ONLY.has(coll) && role !== "superadmin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
+}
+
 async function repoFor(coll: string): Promise<Repository<ObjectLiteral> | null> {
   if (!isMcCollection(coll)) return null;
   return (await getRepository(MC_REGISTRY[coll] as new () => ObjectLiteral)) as Repository<ObjectLiteral>;
@@ -67,11 +78,16 @@ function orderFor(repo: Repository<ObjectLiteral>): Record<string, "ASC" | "DESC
 export async function listCollection(_req: NextRequest, coll: string) {
   const auth = await getCurrentUser();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const forbidden = forbiddenIfNotSuperadmin(coll, auth.payload.role);
+  if (forbidden) return forbidden;
 
   const repo = await repoFor(coll);
   if (!repo) return NextResponse.json({ error: "Unknown collection" }, { status: 404 });
 
-  const where = hasColumn(repo, "deletedAt") ? ({ deletedAt: IsNull() } as ObjectLiteral) : undefined;
+  const where: ObjectLiteral = {};
+  if (hasColumn(repo, "deletedAt")) where.deletedAt = IsNull();
+  if (hasColumn(repo, "organizationId")) where.organizationId = auth.payload.organizationId;
+
   const rows = await repo.find({ where, order: orderFor(repo) });
   return NextResponse.json(rows.map((r) => serialize(repo, r)));
 }
@@ -79,6 +95,8 @@ export async function listCollection(_req: NextRequest, coll: string) {
 export async function createInCollection(req: NextRequest, coll: string) {
   const auth = await getCurrentUser();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const forbidden = forbiddenIfNotSuperadmin(coll, auth.payload.role);
+  if (forbidden) return forbidden;
 
   const repo = await repoFor(coll);
   if (!repo) return NextResponse.json({ error: "Unknown collection" }, { status: 404 });
@@ -97,14 +115,22 @@ export async function createInCollection(req: NextRequest, coll: string) {
 
 // ------------------------------------------------------------------- single row
 
+function scopedWhere(repo: Repository<ObjectLiteral>, id: string, organizationId: string): ObjectLiteral {
+  const where: ObjectLiteral = { id };
+  if (hasColumn(repo, "organizationId")) where.organizationId = organizationId;
+  return where;
+}
+
 export async function getOne(_req: NextRequest, coll: string, id: string) {
   const auth = await getCurrentUser();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const forbidden = forbiddenIfNotSuperadmin(coll, auth.payload.role);
+  if (forbidden) return forbidden;
 
   const repo = await repoFor(coll);
   if (!repo) return NextResponse.json({ error: "Unknown collection" }, { status: 404 });
 
-  const row = await repo.findOne({ where: { id } as ObjectLiteral });
+  const row = await repo.findOne({ where: scopedWhere(repo, id, auth.payload.organizationId) });
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(serialize(repo, row));
 }
@@ -112,6 +138,8 @@ export async function getOne(_req: NextRequest, coll: string, id: string) {
 export async function updateOne(req: NextRequest, coll: string, id: string) {
   const auth = await getCurrentUser();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const forbidden = forbiddenIfNotSuperadmin(coll, auth.payload.role);
+  if (forbidden) return forbidden;
 
   const repo = await repoFor(coll);
   if (!repo) return NextResponse.json({ error: "Unknown collection" }, { status: 404 });
@@ -119,7 +147,7 @@ export async function updateOne(req: NextRequest, coll: string, id: string) {
   const data = deserialize(repo, await req.json());
   mirrorLegacyFields(coll, data);
 
-  let row = await repo.findOne({ where: { id } as ObjectLiteral });
+  let row = await repo.findOne({ where: scopedWhere(repo, id, auth.payload.organizationId) });
   if (!row) {
     // settings is an upsert target
     if (coll === "settings") {
@@ -138,11 +166,13 @@ export async function updateOne(req: NextRequest, coll: string, id: string) {
 export async function deleteOne(_req: NextRequest, coll: string, id: string) {
   const auth = await getCurrentUser();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const forbidden = forbiddenIfNotSuperadmin(coll, auth.payload.role);
+  if (forbidden) return forbidden;
 
   const repo = await repoFor(coll);
   if (!repo) return NextResponse.json({ error: "Unknown collection" }, { status: 404 });
 
-  const row = await repo.findOne({ where: { id } as ObjectLiteral });
+  const row = await repo.findOne({ where: scopedWhere(repo, id, auth.payload.organizationId) });
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (hasColumn(repo, "deletedAt")) {

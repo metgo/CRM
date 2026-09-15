@@ -104,7 +104,13 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p className="text-center text-sm mt-4">
+          <Link href="/forgot-password" className="text-blue-600 font-medium hover:underline">
+            שכחת סיסמה?
+          </Link>
+        </p>
+
+        <p className="text-center text-sm text-gray-500 mt-2">
           אין לך חשבון?{" "}
           <Link href="/signup" className="text-blue-600 font-medium hover:underline">
             הרשם

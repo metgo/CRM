@@ -7,6 +7,7 @@ import {
   COLLECTIONS, peek, startRealtime, useMcStore,
   type CollName, type Rec
 } from "@/lib/mc/store";
+import { useCurrentUser } from "@/lib/mc/currentUser";
 import { SCHEMA } from "@/lib/mc/schema";
 import { lang, setLang, t, type Lang } from "@/lib/mc/i18n";
 import { daysAgo } from "@/lib/mc/format";
@@ -68,6 +69,8 @@ export function useAppShell(): AppShellContextValue {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   useMcStore();
+  const currentUser = useCurrentUser();
+  const isSuperadmin = currentUser?.role === "superadmin";
   const pathname = usePathname();
   const [target, setTarget] = useState<DrawerTarget>(null);
   const [toast, setToast] = useState("");
@@ -147,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {NAV_GROUPS.map((g) => (
                 <div key={g.group} style={{ display: "contents" }}>
                   <div className="navgroup">{t(g.group)}</div>
-                  {g.items.map((it) => {
+                  {g.items.filter((it) => it.id !== "settings" || isSuperadmin).map((it) => {
                     const n = it.badge?.() ?? 0;
                     const active = activeId === it.id;
                     return (

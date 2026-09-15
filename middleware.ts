@@ -4,7 +4,18 @@ import { jwtVerify } from "jose";
 const COOKIE_NAME = "auth_token";
 
 // Routes that are always public — no token required
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth/login", "/api/auth/signup"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/auth/verify-email",
+];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
@@ -29,7 +40,7 @@ export async function middleware(req: NextRequest) {
 
   try {
     const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET ?? "your-secret-key-change-in-production"
+      process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production"
     );
     await jwtVerify(token, secret);
     return NextResponse.next();

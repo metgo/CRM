@@ -4,6 +4,8 @@ import { Organization } from "./entities/Organization";
 import { Profile } from "./entities/Profile";
 import { Client } from "./entities/Client";
 import { Contact } from "./entities/Contact";
+import { AuthToken } from "./entities/AuthToken";
+import { AuthEvent } from "./entities/AuthEvent";
 import { MC_ENTITIES } from "./entities/mc";
 
 const baseConfig: DataSourceOptions = {
@@ -18,6 +20,8 @@ const baseConfig: DataSourceOptions = {
     Profile,
     Client,
     Contact,
+    AuthToken,
+    AuthEvent,
     ...MC_ENTITIES,
   ],
   migrations: [],

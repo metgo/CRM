@@ -1,7 +1,11 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
-import { getRepository, Profile, Organization } from "@/lib/db";
+import { createHash, randomBytes } from "crypto";
+import { cookies, headers } from "next/headers";
+import { getRepository, Profile, Organization, AuthToken, AuthEvent } from "@/lib/db";
+import type { AuthTokenPurpose, AuthEventType } from "@/lib/db";
+import { sendEmail } from "@/lib/email/send";
+import { passwordResetEmail, verificationEmail } from "@/lib/email/templates";
 
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
@@ -9,12 +13,15 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production";
 const TOKEN_EXPIRY = "7d";
 const COOKIE_NAME = "auth_token";
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 export interface JWTPayload {
   userId: string;
   email: string;
   organizationId: string;
   role: string;
+  tokenVersion: number;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -61,6 +68,12 @@ export async function getAuthToken(): Promise<string | null> {
   return cookieStore.get(COOKIE_NAME)?.value ?? null;
 }
 
+/**
+ * `payload.tokenVersion` must match the profile's current `tokenVersion` or
+ * the token is treated as revoked — this is what makes logout, a password
+ * reset, or an admin-forced sign-out actually invalidate a JWT that's
+ * otherwise still cryptographically valid until its 7-day expiry.
+ */
 export async function getCurrentUser(): Promise<{
   user: Profile;
   payload: JWTPayload;
@@ -78,11 +91,169 @@ export async function getCurrentUser(): Promise<{
     });
 
     if (!user) return null;
+    if (user.tokenVersion !== payload.tokenVersion) return null;
     return { user, payload };
   } catch {
     return null;
   }
 }
+
+/** Like getCurrentUser(), but also requires the "superadmin" role (Settings). */
+export async function requireSuperadmin(): Promise<{
+  user: Profile;
+  payload: JWTPayload;
+} | null> {
+  const auth = await getCurrentUser();
+  if (!auth || auth.payload.role !== "superadmin") return null;
+  return auth;
+}
+
+/** Bumps tokenVersion so every JWT issued before this call stops working. */
+export async function invalidateSessions(userId: string): Promise<void> {
+  const profileRepo = await getRepository(Profile);
+  const user = await profileRepo.findOne({ where: { id: userId } });
+  if (!user) return;
+  user.tokenVersion += 1;
+  await profileRepo.save(user);
+}
+
+// ------------------------------------------------------------------ audit log
+
+async function requestMeta(): Promise<{ ip: string | null; userAgent: string | null }> {
+  try {
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+    return { ip, userAgent: h.get("user-agent") };
+  } catch {
+    return { ip: null, userAgent: null };
+  }
+}
+
+async function logAuthEvent(params: {
+  eventType: AuthEventType;
+  profileId?: string | null;
+  organizationId?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const eventRepo = await getRepository(AuthEvent);
+    const { ip, userAgent } = await requestMeta();
+    const event = eventRepo.create({
+      eventType: params.eventType,
+      profileId: params.profileId ?? null,
+      organizationId: params.organizationId ?? null,
+      ip,
+      userAgent,
+      metadata: params.metadata ?? null,
+    });
+    await eventRepo.save(event);
+  } catch (error) {
+    console.error("Failed to log auth event:", error);
+  }
+}
+
+// ------------------------------------------------------------- reset/verify tokens
+
+function appUrl(): string {
+  return process.env.APP_URL || "http://localhost:3000";
+}
+
+function hashRawToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+async function issueAuthToken(profileId: string, purpose: AuthTokenPurpose, ttlMs: number): Promise<string> {
+  const tokenRepo = await getRepository(AuthToken);
+  const raw = randomBytes(32).toString("hex");
+  const entity = tokenRepo.create({
+    profileId,
+    purpose,
+    tokenHash: hashRawToken(raw),
+    expiresAt: new Date(Date.now() + ttlMs),
+  });
+  await tokenRepo.save(entity);
+  return raw;
+}
+
+/** Marks a matching, unused, unexpired token as used and returns it, or null. */
+async function consumeAuthToken(raw: string, purpose: AuthTokenPurpose): Promise<AuthToken | null> {
+  const tokenRepo = await getRepository(AuthToken);
+  const record = await tokenRepo.findOne({ where: { tokenHash: hashRawToken(raw), purpose } });
+  if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) return null;
+
+  record.usedAt = new Date();
+  await tokenRepo.save(record);
+  return record;
+}
+
+async function sendVerificationEmail(profile: Profile): Promise<void> {
+  const raw = await issueAuthToken(profile.id, "email_verify", VERIFY_TOKEN_TTL_MS);
+  const { subject, html } = verificationEmail(`${appUrl()}/verify-email?token=${raw}`);
+  await sendEmail({ to: profile.email, subject, html });
+}
+
+/**
+ * Always resolves the same way whether or not `email` matches an account, so
+ * this can't be used to enumerate registered emails.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const profileRepo = await getRepository(Profile);
+  const user = await profileRepo.findOne({ where: { email: email.toLowerCase() } });
+  if (!user) return;
+
+  const raw = await issueAuthToken(user.id, "password_reset", RESET_TOKEN_TTL_MS);
+  const { subject, html } = passwordResetEmail(`${appUrl()}/reset-password?token=${raw}`);
+  await sendEmail({ to: user.email, subject, html });
+
+  await logAuthEvent({
+    eventType: "password_reset_requested",
+    profileId: user.id,
+    organizationId: user.organizationId,
+  });
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const record = await consumeAuthToken(token, "password_reset");
+  if (!record) return { success: false, error: "Invalid or expired reset link" };
+
+  const profileRepo = await getRepository(Profile);
+  const user = await profileRepo.findOne({ where: { id: record.profileId } });
+  if (!user) return { success: false, error: "Invalid or expired reset link" };
+
+  user.passwordHash = await hashPassword(newPassword);
+  user.tokenVersion += 1; // invalidate any sessions issued before the reset
+  user.failedLoginAttempts = 0;
+  await profileRepo.save(user);
+
+  await logAuthEvent({
+    eventType: "password_reset_completed",
+    profileId: user.id,
+    organizationId: user.organizationId,
+  });
+  return { success: true };
+}
+
+export async function verifyEmail(
+  token: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const record = await consumeAuthToken(token, "email_verify");
+  if (!record) return { success: false, error: "Invalid or expired verification link" };
+
+  const profileRepo = await getRepository(Profile);
+  const user = await profileRepo.findOne({ where: { id: record.profileId } });
+  if (!user) return { success: false, error: "Invalid or expired verification link" };
+
+  user.emailVerified = true;
+  await profileRepo.save(user);
+
+  await logAuthEvent({ eventType: "email_verified", profileId: user.id, organizationId: user.organizationId });
+  return { success: true };
+}
+
+// ------------------------------------------------------------------- sign in/up
 
 export async function signIn(
   email: string,
@@ -90,25 +261,40 @@ export async function signIn(
 ): Promise<{ success: true; token: string } | { success: false; error: string }> {
   try {
     const profileRepo = await getRepository(Profile);
-    const user = await profileRepo.findOne({
-      where: { email: email.toLowerCase() },
-    });
+    const normalizedEmail = email.toLowerCase();
+    const user = await profileRepo.findOne({ where: { email: normalizedEmail } });
 
     if (!user) {
+      await logAuthEvent({ eventType: "login_failed", metadata: { email: normalizedEmail, reason: "no_account" } });
       return { success: false, error: "Invalid credentials" };
     }
 
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
+      user.failedLoginAttempts += 1;
+      await profileRepo.save(user);
+      await logAuthEvent({
+        eventType: "login_failed",
+        profileId: user.id,
+        organizationId: user.organizationId,
+        metadata: { reason: "bad_password", attempts: user.failedLoginAttempts },
+      });
       return { success: false, error: "Invalid credentials" };
     }
+
+    user.failedLoginAttempts = 0;
+    user.lastLoginAt = new Date();
+    await profileRepo.save(user);
 
     const token = createToken({
       userId: user.id,
       email: user.email,
       organizationId: user.organizationId,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     });
+
+    await logAuthEvent({ eventType: "login_success", profileId: user.id, organizationId: user.organizationId });
 
     return { success: true, token };
   } catch (error) {
@@ -139,12 +325,14 @@ export async function signUp(
     await orgRepo.save(organization);
 
     const passwordHash = await hashPassword(password);
+    // The signup flow always creates a brand-new organization, so its creator
+    // becomes that org's superadmin (the role required to reach Settings).
     const profile = profileRepo.create({
       organizationId: organization.id,
       fullName,
       email: normalizedEmail,
       passwordHash,
-      role: "admin",
+      role: "superadmin",
     });
     await profileRepo.save(profile);
 
@@ -153,7 +341,11 @@ export async function signUp(
       email: profile.email,
       organizationId: profile.organizationId,
       role: profile.role,
+      tokenVersion: profile.tokenVersion,
     });
+
+    await logAuthEvent({ eventType: "signup", profileId: profile.id, organizationId: profile.organizationId });
+    sendVerificationEmail(profile).catch((error) => console.error("Failed to send verification email:", error));
 
     return { success: true, token };
   } catch (error) {
