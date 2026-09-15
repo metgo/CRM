@@ -3,7 +3,10 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { getRepository, Profile, Organization } from "@/lib/db";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
+}
+const JWT_SECRET = process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production";
 const TOKEN_EXPIRY = "7d";
 const COOKIE_NAME = "auth_token";
 
