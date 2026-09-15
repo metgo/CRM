@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { COLLECTIONS, getSettings, rows, save, type CollName } from "@/lib/mc/store";
+import { COLLECTIONS, getSettings, rows, save, useMcStore, type CollName } from "@/lib/mc/store";
 import { SCHEMA } from "@/lib/mc/schema";
 import { L, t } from "@/lib/mc/i18n";
 import { DataTable } from "../DataTable";
@@ -23,6 +23,7 @@ const NUMERIC_SETTINGS: Array<[keyof ReturnType<typeof getSettings>, { he: strin
 export function SettingsPage({
   onOpen, onToast
 }: { onOpen: (t: { coll: CollName; id: string | null }) => void; onToast: (m: string) => void }) {
+  useMcStore();
   const [draft, setDraft] = useState<Record<string, number>>({ ...(getSettings() as any) });
   const [busy, setBusy] = useState(false);
 

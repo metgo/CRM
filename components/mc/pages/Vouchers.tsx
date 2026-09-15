@@ -1,6 +1,6 @@
 "use client";
 
-import { rows, type CollName } from "@/lib/mc/store";
+import { rows, useMcStore, type CollName } from "@/lib/mc/store";
 import { SCHEMA } from "@/lib/mc/schema";
 import { L, t } from "@/lib/mc/i18n";
 import { fmtN, ils } from "@/lib/mc/format";
@@ -11,6 +11,7 @@ import { EmptyState, Kpi, Section } from "../ui";
 export function Vouchers({
   onOpen
 }: { onOpen: (target: { coll: CollName; id: string | null }) => void }) {
+  useMcStore();
   const a = aggregates();
   const c = a.voucherCounts;
   const total = Object.values(c).reduce((x, y) => x + y, 0);

@@ -1,6 +1,6 @@
 "use client";
 
-import { rows, save, type CollName } from "@/lib/mc/store";
+import { rows, save, useMcStore, type CollName } from "@/lib/mc/store";
 import { SCHEMA } from "@/lib/mc/schema";
 import { E } from "@/lib/mc/enums";
 import { L, t } from "@/lib/mc/i18n";
@@ -19,6 +19,7 @@ const AGING: Array<[{ he: string; en: string }, number, number]> = [
 ];
 
 export function Dashboard({ onOpen, onToast }: { onOpen: Open; onToast: (m: string) => void }) {
+  useMcStore();
   const a = aggregates();
   const alerts = buildAlerts();
   const anyData = (["clients", "deals", "payments", "merchants", "tasks"] as CollName[]).some((c) => rows(c).length);

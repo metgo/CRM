@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { rows, type CollName } from "@/lib/mc/store";
+import { rows, useMcStore, type CollName } from "@/lib/mc/store";
 import { SCHEMA, disp, nameOf } from "@/lib/mc/schema";
 import { E } from "@/lib/mc/enums";
 import { L, t } from "@/lib/mc/i18n";
@@ -15,6 +15,7 @@ const STAGES = ["lead", "meeting", "quote", "verbal", "po", "won"];
 export function DealsBoard({
   onOpen
 }: { onOpen: (target: { coll: CollName; id: string | null }) => void }) {
+  useMcStore();
   const [mode, setMode] = useState<"board" | "table">("board");
   const deals = rows("deals");
 

@@ -5,7 +5,18 @@
  * localStorage "local mode" are replaced by fetch() against /api/mc/*, which is
  * backed by TypeORM (see lib/mc/server/*). The in-memory cache + subscribe/emit
  * design is unchanged, so every ported page/component works as before.
+ *
+ * Loading is lazy and per-collection: `rows(c)` fetches `c` the first time
+ * anything reads it (a collection page, a foreign-key name lookup via
+ * schema.tsx's nameOf/getRec, a picker in Fields.tsx, …) and caches it after
+ * that. Nothing is fetched just because the app mounted — visiting `/deals`
+ * pulls `deals` (and, through nameOf, `clients` for the client-name column);
+ * a route that never reads a collection never calls its API. Use `peek(c)`
+ * instead of `rows(c)` for incidental UI (e.g. sidebar badge counts) that
+ * must not itself trigger a fetch for a collection nobody has opened yet.
  */
+
+import { useEffect, useState } from "react";
 
 export type Rec = Record<string, any>;
 
@@ -44,9 +55,31 @@ export const subscribe = (fn: () => void) => {
   return () => listeners.delete(fn);
 };
 export const getVersion = () => version;
-export const rows = (c: CollName): Rec[] => cache[c] || [];
+
+/** Read `c` without triggering a fetch. Use for peripheral UI (badges, search over what's already loaded). */
+export const peek = (c: CollName): Rec[] => cache[c] || [];
+export const isLoaded = (c: CollName): boolean => loaded.has(c);
+export const isLoading = (c: CollName): boolean => pending.has(c);
+
+/** Read `c`, kicking off a fetch the first time it's read. Re-render via `useMcStore()` to pick up the result. */
+export const rows = (c: CollName): Rec[] => {
+  ensureLoaded(c);
+  return cache[c] || [];
+};
 export const getRec = (c: CollName, id?: string | null): Rec | undefined =>
   id ? rows(c).find((r) => r.id === id) : undefined;
+
+/** Subscribe a component to store changes (new data arriving, saves, deletes). */
+export function useMcStore(): number {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const unsub = subscribe(() => force((n) => n + 1));
+    return () => {
+      unsub();
+    };
+  }, []);
+  return getVersion();
+}
 
 export type Settings = {
   vat: number; targetYear: number;
@@ -89,22 +122,31 @@ async function req(path: string, init?: RequestInit): Promise<any> {
 }
 
 /* ------------------------------------------------------------------- api */
-export async function loadAll(): Promise<void> {
-  await Promise.all(
-    COLLECTIONS.map(async (c) => {
-      try {
-        cache[c] = ((await req(`/${c}`)) as Rec[]) || [];
-      } catch (e) {
-        console.warn(`load ${c}:`, (e as Error).message);
-      }
+const loaded = new Set<CollName>();
+const pending = new Map<CollName, Promise<void>>();
+
+/** Fetch `c` once, in the background, deduping concurrent callers. No-op once loaded. */
+function ensureLoaded(c: CollName): void {
+  if (loaded.has(c) || pending.has(c)) return;
+  const p = req(`/${c}`)
+    .then((data) => {
+      cache[c] = (data as Rec[]) || [];
     })
-  );
-  emit();
+    .catch((e) => {
+      console.warn(`load ${c}:`, (e as Error).message);
+    })
+    .finally(() => {
+      loaded.add(c);
+      pending.delete(c);
+      emit();
+    });
+  pending.set(c, p);
 }
 
 export async function reload(c: CollName): Promise<void> {
   try {
     cache[c] = ((await req(`/${c}`)) as Rec[]) || [];
+    loaded.add(c);
     emit();
   } catch (e) {
     console.warn(`reload ${c}:`, (e as Error).message);
@@ -138,10 +180,14 @@ export async function remove(c: CollName, id: string): Promise<void> {
   }
 }
 
-/** Replaces Supabase realtime: poll every 20s so other users' changes show up. */
+/**
+ * Replaces Supabase realtime: poll every 20s so other users' changes show up.
+ * Only refreshes collections that have actually been loaded (i.e. some page
+ * already read them this session) — it must not become a backdoor loadAll().
+ */
 export function startRealtime(): () => void {
   const timer = setInterval(() => {
-    void loadAll();
+    loaded.forEach((c) => void reload(c));
   }, 20000);
   return () => clearInterval(timer);
 }

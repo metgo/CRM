@@ -1,7 +1,7 @@
 "use client";
 
 import { SCHEMA } from "@/lib/mc/schema";
-import { rows, type CollName, type Rec } from "@/lib/mc/store";
+import { rows, useMcStore, type CollName, type Rec } from "@/lib/mc/store";
 import { t } from "@/lib/mc/i18n";
 import { DataTable } from "../DataTable";
 import { EmptyState } from "../ui";
@@ -9,6 +9,7 @@ import { EmptyState } from "../ui";
 export function CollectionPage({
   coll, onOpen
 }: { coll: CollName; onOpen: (target: { coll: CollName; id: string | null }) => void }) {
+  useMcStore();
   const schema = SCHEMA[coll];
   const list: Rec[] = rows(coll).slice();
   list.sort(schema.sort || ((a, b) => schema.title(a).localeCompare(schema.title(b))));

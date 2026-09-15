@@ -1,11 +1,12 @@
 "use client";
 
-import { rows, save } from "@/lib/mc/store";
+import { rows, save, useMcStore } from "@/lib/mc/store";
 import { L, t } from "@/lib/mc/i18n";
 import { buildAlerts } from "@/lib/mc/alerts";
 import { Pill, Toggle } from "../ui";
 
 export function Automations({ onToast }: { onToast: (m: string) => void }) {
+  useMcStore();
   const list = rows("automations").slice().sort((a, b) => Number(a.n) - Number(b.n));
   const firing = buildAlerts().reduce<Record<number, number>>((acc, a) => {
     acc[a.rule] = (acc[a.rule] || 0) + 1;

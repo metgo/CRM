@@ -1,6 +1,6 @@
 "use client";
 
-import { rows } from "@/lib/mc/store";
+import { rows, useMcStore } from "@/lib/mc/store";
 import { L, t } from "@/lib/mc/i18n";
 import { fmtN, ils } from "@/lib/mc/format";
 import { aggregates } from "@/lib/mc/compute";
@@ -35,6 +35,7 @@ const TEMPLATES = [
 ];
 
 export function Reports() {
+  useMcStore();
   const a = aggregates();
   return (
     <>
