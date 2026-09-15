@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
-import { getRepository, Profile } from "@/lib/db";
+import { getRepository, Profile, Organization } from "@/lib/db";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const TOKEN_EXPIRY = "7d";
@@ -111,5 +111,50 @@ export async function signIn(
   } catch (error) {
     console.error("Sign in error:", error);
     return { success: false, error: "Authentication failed" };
+  }
+}
+
+export async function signUp(
+  fullName: string,
+  email: string,
+  password: string,
+  organizationName?: string
+): Promise<{ success: true; token: string } | { success: false; error: string }> {
+  try {
+    const profileRepo = await getRepository(Profile);
+    const normalizedEmail = email.toLowerCase();
+
+    const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
+    if (existing) {
+      return { success: false, error: "Email already in use" };
+    }
+
+    const orgRepo = await getRepository(Organization);
+    const organization = orgRepo.create({
+      name: organizationName?.trim() || `${fullName}'s Organization`,
+    });
+    await orgRepo.save(organization);
+
+    const passwordHash = await hashPassword(password);
+    const profile = profileRepo.create({
+      organizationId: organization.id,
+      fullName,
+      email: normalizedEmail,
+      passwordHash,
+      role: "admin",
+    });
+    await profileRepo.save(profile);
+
+    const token = createToken({
+      userId: profile.id,
+      email: profile.email,
+      organizationId: profile.organizationId,
+      role: profile.role,
+    });
+
+    return { success: true, token };
+  } catch (error) {
+    console.error("Sign up error:", error);
+    return { success: false, error: "Registration failed" };
   }
 }

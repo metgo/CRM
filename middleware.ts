@@ -23,6 +23,7 @@ export async function middleware(request: NextRequest) {
   if (
     !isAuthenticated &&
     !request.nextUrl.pathname.startsWith("/login") &&
+    !request.nextUrl.pathname.startsWith("/signup") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/api/auth")
   ) {
@@ -31,8 +32,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from login
-  if (isAuthenticated && request.nextUrl.pathname === "/login") {
+  // Redirect authenticated users away from login/signup
+  if (
+    isAuthenticated &&
+    (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
