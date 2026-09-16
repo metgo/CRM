@@ -42,3 +42,18 @@ export function verificationEmail(verifyLink: string): { subject: string; html: 
     ),
   };
 }
+
+export function signupOtpEmail(otp: string): { subject: string; html: string } {
+  return {
+    subject: "Your MetGo CRM verification code",
+    html: layout(
+      "Verify your email address",
+      `<p>Enter this code to complete your MetGo CRM registration:</p>
+       <div style="font-size:36px;font-weight:bold;letter-spacing:10px;text-align:center;
+                   background:#f4f4f4;border-radius:8px;padding:16px 24px;margin:24px 0;">
+         ${otp}
+       </div>
+       <p style="color:#888;font-size:13px;">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>`
+    ),
+  };
+}

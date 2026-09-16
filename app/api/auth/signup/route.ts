@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { signUp } from "@/lib/auth";
+import { requestSignupOtp } from "@/lib/auth";
 
-const COOKIE_NAME = "auth_token";
-
+/*
+ POST /api/auth/signup
+ */
 export async function POST(request: NextRequest) {
   try {
     const { fullName, email, password, organizationName } = await request.json();
@@ -21,28 +22,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await signUp(fullName, email, password, organizationName);
+    const result = await requestSignupOtp(fullName, email, password, organizationName);
 
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 409 });
+      const status = result.error === "Email already in use" ? 409 : 500;
+      return NextResponse.json({ error: result.error }, { status });
     }
 
-    const response = NextResponse.json({ success: true });
-
-    response.cookies.set(COOKIE_NAME, result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    });
-
-    return response;
+    // Return the pending token — the client submits it alongside the OTP code
+    return NextResponse.json({ pendingToken: result.pendingToken });
   } catch (error) {
     console.error("Signup error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

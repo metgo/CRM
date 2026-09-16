@@ -5,7 +5,7 @@ import { cookies, headers } from "next/headers";
 import { getRepository, Profile, Organization, AuthToken, AuthEvent } from "@/lib/db";
 import type { AuthTokenPurpose, AuthEventType } from "@/lib/db";
 import { sendEmail } from "@/lib/email/send";
-import { passwordResetEmail, verificationEmail } from "@/lib/email/templates";
+import { passwordResetEmail, verificationEmail, signupOtpEmail } from "@/lib/email/templates";
 
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
@@ -254,6 +254,123 @@ export async function verifyEmail(
 }
 
 // ------------------------------------------------------------------- sign in/up
+
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_PENDING_SECRET = (process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production") + ":otp";
+
+export interface PendingSignupPayload {
+  email: string;
+  fullName: string;
+  passwordHash: string;
+  organizationName: string;
+  otpHash: string; // sha256 of the 6-digit code
+  exp: number;
+}
+
+/*
+ * Step 1 of OTP signup.
+ */
+export async function requestSignupOtp(
+  fullName: string,
+  email: string,
+  password: string,
+  organizationName?: string
+): Promise<{ success: true; pendingToken: string } | { success: false; error: string }> {
+  try {
+    const profileRepo = await getRepository(Profile);
+    const normalizedEmail = email.toLowerCase();
+
+    const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
+    if (existing) return { success: false, error: "Email already in use" };
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+    const otpHash = createHash("sha256").update(otp).digest("hex");
+    const passwordHash = await hashPassword(password);
+
+    const payload: PendingSignupPayload = {
+      email: normalizedEmail,
+      fullName,
+      passwordHash,
+      organizationName: organizationName?.trim() || `${fullName}'s Organization`,
+      otpHash,
+      exp: Math.floor((Date.now() + OTP_TTL_MS) / 1000),
+    };
+
+    const pendingToken = jwt.sign(payload, OTP_PENDING_SECRET);
+
+    const { subject, html } = signupOtpEmail(otp);
+    await sendEmail({ to: normalizedEmail, subject, html });
+
+    return { success: true, pendingToken };
+  } catch (error) {
+    console.error("requestSignupOtp error:", error);
+    return { success: false, error: "Failed to send OTP" };
+  }
+}
+
+/*
+ * Step 2 of OTP signup.
+ * Verifies the pending token and the submitted OTP code
+ */
+export async function verifySignupOtp(
+  pendingToken: string,
+  otp: string
+): Promise<{ success: true; token: string } | { success: false; error: string }> {
+  let pending: PendingSignupPayload;
+  try {
+    pending = jwt.verify(pendingToken, OTP_PENDING_SECRET) as PendingSignupPayload;
+  } catch {
+    return { success: false, error: "Verification session expired. Please sign up again." };
+  }
+
+  if (pending.exp < Math.floor(Date.now() / 1000)) {
+    return { success: false, error: "OTP has expired. Please sign up again." };
+  }
+
+  const submittedHash = createHash("sha256").update(otp.trim()).digest("hex");
+  if (submittedHash !== pending.otpHash) {
+    return { success: false, error: "Incorrect code. Please try again." };
+  }
+
+  try {
+    const profileRepo = await getRepository(Profile);
+
+    // Guard against a race where the email was registered between step 1 and 2
+    const existing = await profileRepo.findOne({ where: { email: pending.email } });
+    if (existing) return { success: false, error: "Email already in use" };
+
+    const orgRepo = await getRepository(Organization);
+    const organization = orgRepo.create({ name: pending.organizationName });
+    await orgRepo.save(organization);
+
+    const profile = profileRepo.create({
+      organizationId: organization.id,
+      fullName: pending.fullName,
+      email: pending.email,
+      passwordHash: pending.passwordHash,
+      role: "superadmin",
+      emailVerified: true, // they proved inbox access via OTP
+    });
+    await profileRepo.save(profile);
+
+    const token = createToken({
+      userId: profile.id,
+      email: profile.email,
+      organizationId: profile.organizationId,
+      role: profile.role,
+      tokenVersion: profile.tokenVersion,
+    });
+
+    await logAuthEvent({ eventType: "signup", profileId: profile.id, organizationId: profile.organizationId });
+
+    return { success: true, token };
+  } catch (error) {
+    console.error("verifySignupOtp error:", error);
+    return { success: false, error: "Registration failed" };
+  }
+}
+
+
 
 export async function signIn(
   email: string,
