@@ -14,6 +14,8 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-prod
 const TOKEN_EXPIRY = "7d";
 const COOKIE_NAME = "auth_token";
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
+const RESET_RESEND_INTERVAL_MS = 60 * 1000; // 60s
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 
 export interface JWTPayload {
   userId: string;
@@ -193,6 +195,17 @@ export async function requestPasswordReset(email: string): Promise<void> {
   const profileRepo = await getRepository(Profile);
   const user = await profileRepo.findOne({ where: { email: email.toLowerCase() } });
   if (!user) return;
+
+  // Silently drop rapid repeats instead of surfacing an error — the response
+  // to the client is always the same regardless, so this can't be probed.
+  const eventRepo = await getRepository(AuthEvent);
+  const lastRequest = await eventRepo.findOne({
+    where: { eventType: "password_reset_requested", profileId: user.id },
+    order: { createdAt: "DESC" },
+  });
+  if (lastRequest && Date.now() - lastRequest.createdAt.getTime() < RESET_RESEND_INTERVAL_MS) {
+    return;
+  }
 
   const raw = await issueAuthToken(user.id, "password_reset", RESET_TOKEN_TTL_MS);
   const { subject, html } = passwordResetEmail(`${appUrl()}/reset-password?token=${raw}`);
@@ -380,7 +393,10 @@ export async function verifySignupOtp(
 export async function signIn(
   email: string,
   password: string
-): Promise<{ success: true; token: string } | { success: false; error: string }> {
+): Promise<
+  | { success: true; token: string }
+  | { success: false; error: string; code?: "locked" }
+> {
   try {
     const profileRepo = await getRepository(Profile);
     const normalizedEmail = email.toLowerCase();
@@ -389,6 +405,20 @@ export async function signIn(
     if (!user) {
       await logAuthEvent({ eventType: "login_failed", metadata: { email: normalizedEmail, reason: "no_account" } });
       return { success: false, error: "Invalid credentials" };
+    }
+
+    if (user.failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
+      await logAuthEvent({
+        eventType: "login_failed",
+        profileId: user.id,
+        organizationId: user.organizationId,
+        metadata: { reason: "locked" },
+      });
+      return {
+        success: false,
+        error: "Too many failed attempts. Reset your password to regain access.",
+        code: "locked",
+      };
     }
 
     const isValid = await verifyPassword(password, user.passwordHash);

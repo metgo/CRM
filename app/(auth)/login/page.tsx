@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [locked, setLocked] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -26,7 +27,8 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError("שגיאה בכניסה. בדוק את כתובת האימייל והסיסמה.");
+        setError(data?.error || "שגיאה בכניסה. בדוק את כתובת האימייל והסיסמה.");
+        if (res.status === 423) setLocked(true);
         setLoading(false);
         return;
       }
@@ -64,7 +66,10 @@ export default function LoginPage() {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setLocked(false);
+              }}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="you@example.com"
               dir="ltr"
@@ -97,7 +102,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || locked}
             className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? "מתחבר..." : "כניסה למערכת"}
