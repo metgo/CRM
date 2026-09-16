@@ -5,9 +5,9 @@ import {
   CreateDateColumn,
 } from "typeorm";
 
-export type AuthTokenPurpose = "password_reset" | "email_verify";
+export type AuthTokenPurpose = "password_reset";
 
-/** Single-use tokens for password reset / email verification (hashed at rest). */
+/** Single-use tokens for password reset (hashed at rest). */
 @Entity("auth_tokens")
 export class AuthToken {
   @PrimaryGeneratedColumn("uuid")

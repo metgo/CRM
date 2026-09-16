@@ -5,7 +5,7 @@ import { cookies, headers } from "next/headers";
 import { getRepository, Profile, Organization, AuthToken, AuthEvent } from "@/lib/db";
 import type { AuthTokenPurpose, AuthEventType } from "@/lib/db";
 import { sendEmail } from "@/lib/email/send";
-import { passwordResetEmail, verificationEmail, signupOtpEmail } from "@/lib/email/templates";
+import { passwordResetEmail, signupOtpEmail } from "@/lib/email/templates";
 
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
@@ -14,7 +14,6 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-prod
 const TOKEN_EXPIRY = "7d";
 const COOKIE_NAME = "auth_token";
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
-const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 export interface JWTPayload {
   userId: string;
@@ -186,12 +185,6 @@ async function consumeAuthToken(raw: string, purpose: AuthTokenPurpose): Promise
   return record;
 }
 
-async function sendVerificationEmail(profile: Profile): Promise<void> {
-  const raw = await issueAuthToken(profile.id, "email_verify", VERIFY_TOKEN_TTL_MS);
-  const { subject, html } = verificationEmail(`${appUrl()}/verify-email?token=${raw}`);
-  await sendEmail({ to: profile.email, subject, html });
-}
-
 /**
  * Always resolves the same way whether or not `email` matches an account, so
  * this can't be used to enumerate registered emails.
@@ -233,23 +226,6 @@ export async function resetPassword(
     profileId: user.id,
     organizationId: user.organizationId,
   });
-  return { success: true };
-}
-
-export async function verifyEmail(
-  token: string
-): Promise<{ success: true } | { success: false; error: string }> {
-  const record = await consumeAuthToken(token, "email_verify");
-  if (!record) return { success: false, error: "Invalid or expired verification link" };
-
-  const profileRepo = await getRepository(Profile);
-  const user = await profileRepo.findOne({ where: { id: record.profileId } });
-  if (!user) return { success: false, error: "Invalid or expired verification link" };
-
-  user.emailVerified = true;
-  await profileRepo.save(user);
-
-  await logAuthEvent({ eventType: "email_verified", profileId: user.id, organizationId: user.organizationId });
   return { success: true };
 }
 
@@ -449,53 +425,3 @@ export async function signIn(
   }
 }
 
-export async function signUp(
-  fullName: string,
-  email: string,
-  password: string,
-  organizationName?: string
-): Promise<{ success: true; token: string } | { success: false; error: string }> {
-  try {
-    const profileRepo = await getRepository(Profile);
-    const normalizedEmail = email.toLowerCase();
-
-    const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
-    if (existing) {
-      return { success: false, error: "Email already in use" };
-    }
-
-    const orgRepo = await getRepository(Organization);
-    const organization = orgRepo.create({
-      name: organizationName?.trim() || `${fullName}'s Organization`,
-    });
-    await orgRepo.save(organization);
-
-    const passwordHash = await hashPassword(password);
-    // The signup flow always creates a brand-new organization, so its creator
-    // becomes that org's superadmin (the role required to reach Settings).
-    const profile = profileRepo.create({
-      organizationId: organization.id,
-      fullName,
-      email: normalizedEmail,
-      passwordHash,
-      role: "superadmin",
-    });
-    await profileRepo.save(profile);
-
-    const token = createToken({
-      userId: profile.id,
-      email: profile.email,
-      organizationId: profile.organizationId,
-      role: profile.role,
-      tokenVersion: profile.tokenVersion,
-    });
-
-    await logAuthEvent({ eventType: "signup", profileId: profile.id, organizationId: profile.organizationId });
-    sendVerificationEmail(profile).catch((error) => console.error("Failed to send verification email:", error));
-
-    return { success: true, token };
-  } catch (error) {
-    console.error("Sign up error:", error);
-    return { success: false, error: "Registration failed" };
-  }
-}

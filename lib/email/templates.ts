@@ -31,18 +31,6 @@ export function passwordResetEmail(resetLink: string): { subject: string; html: 
   };
 }
 
-export function verificationEmail(verifyLink: string): { subject: string; html: string } {
-  return {
-    subject: "Verify your MetGo CRM email",
-    html: layout(
-      "Verify your email",
-      `<p>Confirm this email address to finish setting up your MetGo CRM account.</p>
-       ${button(verifyLink, "Verify email")}
-       <p>This link expires in 24 hours.</p>`
-    ),
-  };
-}
-
 export function signupOtpEmail(otp: string): { subject: string; html: string } {
   return {
     subject: "Your MetGo CRM verification code",
