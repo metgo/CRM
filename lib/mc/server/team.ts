@@ -18,19 +18,29 @@ import type { UserRole } from "@/lib/db";
  * lib/auth/index.ts, same as every other profile-touching auth action.
  */
 
-async function requireSuperadmin() {
+async function requireAuth() {
   const auth = await getCurrentUser();
   if (!auth) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) } as const;
-  if (auth.payload.role !== "superadmin") {
+  return { auth } as const;
+}
+
+async function requireSuperadmin() {
+  const result = await requireAuth();
+  if (result.error) return result;
+  if (result.auth.payload.role !== "superadmin") {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) } as const;
   }
-  return { auth } as const;
+  return result;
 }
 
 const VALID_ROLES = new Set<UserRole>(["superadmin", "agent"]);
 
+// Listing is open to any authenticated org member — deals/tasks/etc. all
+// reference teammates as owner/assignee, so everyone needs to resolve names
+// and pick from the picker, not just superadmins. Creating/editing/removing
+// an actual login stays superadmin-only (see requireSuperadmin below).
 export async function listTeam(): Promise<NextResponse> {
-  const result = await requireSuperadmin();
+  const result = await requireAuth();
   if (result.error) return result.error;
 
   const members = await listTeamMembers(result.auth.payload.organizationId);
@@ -38,7 +48,7 @@ export async function listTeam(): Promise<NextResponse> {
 }
 
 export async function getTeamMember(id: string): Promise<NextResponse> {
-  const result = await requireSuperadmin();
+  const result = await requireAuth();
   if (result.error) return result.error;
 
   const members = await listTeamMembers(result.auth.payload.organizationId);

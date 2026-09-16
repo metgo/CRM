@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { Bi } from "./i18n";
 import { L, lang, t } from "./i18n";
-import { enumLabel } from "./enums";
-import { getRec, rows, type CollName, type Rec } from "./store";
+import { E, enumLabel } from "./enums";
+import { getRec, rows, save, type CollName, type Rec } from "./store";
 import { daysAgo, daysTo, dayWord, fmtDate, fmtN } from "./format";
 import {
   gapDays, isStuck, lastContactDays, nextReport, overdue, payStatus,
@@ -733,7 +733,25 @@ export const SCHEMA: Record<CollName, Schema> = {
           return <DateText v={r.due} />;
         }
       },
-      { h: { he: "סטטוס", en: "Status" }, cell: (r) => <Pill group="taskStatus" value={r.status} /> },
+      {
+        h: { he: "סטטוס", en: "Status" },
+        cell: (r) => (
+          <select
+            className="statussel"
+            value={r.status || ""}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              save("tasks", r.id, { status: e.target.value }).catch((err) =>
+                console.warn("update task status:", (err as Error).message)
+              );
+            }}
+          >
+            {Object.keys(E.taskStatus).map((k) => (
+              <option key={k} value={k}>{enumLabel("taskStatus", k)}</option>
+            ))}
+          </select>
+        )
+      },
       { h: { he: "מקור", en: "Source" }, cell: (r) => <Pill group="taskSrc" value={r.src} /> }
     ],
     sort: (a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999"))
