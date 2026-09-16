@@ -257,6 +257,7 @@ export async function verifyEmail(
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_PENDING_SECRET = (process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production") + ":otp";
+const OTP_RESEND_INTERVAL_MS = 45 * 1000; //45 seconds
 
 export interface PendingSignupPayload {
   email: string;
@@ -275,13 +276,36 @@ export async function requestSignupOtp(
   email: string,
   password: string,
   organizationName?: string
-): Promise<{ success: true; pendingToken: string } | { success: false; error: string }> {
+): Promise<
+  | { success: true; pendingToken: string }
+  | { success: false; error: string; code?: "rate_limited" }
+> {
   try {
     const profileRepo = await getRepository(Profile);
     const normalizedEmail = email.toLowerCase();
 
     const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
     if (existing) return { success: false, error: "Email already in use" };
+
+    const eventRepo = await getRepository(AuthEvent);
+    const lastRequest = await eventRepo
+      .createQueryBuilder("e")
+      .where("e.event_type = :type", { type: "signup_otp_requested" })
+      .andWhere("e.metadata->>'email' = :email", { email: normalizedEmail })
+      .orderBy("e.created_at", "DESC")
+      .getOne();
+
+    if (lastRequest) {
+      const elapsedMs = Date.now() - lastRequest.createdAt.getTime();
+      if (elapsedMs < OTP_RESEND_INTERVAL_MS) {
+        const waitSec = Math.ceil((OTP_RESEND_INTERVAL_MS - elapsedMs) / 1000);
+        return {
+          success: false,
+          error: `נא להמתין ${waitSec} שניות לפני שליחה חוזרת`,
+          code: "rate_limited",
+        };
+      }
+    }
 
     const otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
     const otpHash = createHash("sha256").update(otp).digest("hex");
@@ -300,6 +324,11 @@ export async function requestSignupOtp(
 
     const { subject, html } = signupOtpEmail(otp);
     await sendEmail({ to: normalizedEmail, subject, html });
+
+    await logAuthEvent({
+      eventType: "signup_otp_requested",
+      metadata: { email: normalizedEmail },
+    });
 
     return { success: true, pendingToken };
   } catch (error) {

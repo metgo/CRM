@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     const result = await requestSignupOtp(fullName, email, password, organizationName);
 
     if (!result.success) {
-      const status = result.error === "Email already in use" ? 409 : 500;
+      const status =
+        result.error === "Email already in use" ? 409 : result.code === "rate_limited" ? 429 : 500;
       return NextResponse.json({ error: result.error }, { status });
     }
 

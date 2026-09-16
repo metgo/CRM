@@ -12,7 +12,8 @@ export type AuthEventType =
   | "logout"
   | "password_reset_requested"
   | "password_reset_completed"
-  | "email_verified";
+  | "email_verified"
+  | "signup_otp_requested";
 
 /** Append-only audit trail for auth events. */
 @Entity("auth_events")
