@@ -173,9 +173,9 @@ function OtpForm({
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const router = useRouter();
 
-  // Start countdown on mount and whenever a new OTP is sent
+  // OtpForm is remounted (via `key={pendingToken}` in the parent) whenever a
+  // new OTP is sent, so this only needs to run once per mount.
   useEffect(() => {
-    setCountdown(RESEND_COOLDOWN);
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -186,7 +186,7 @@ function OtpForm({
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [pendingToken]); // re-run when pendingToken changes (i.e. after resend)
+  }, []);
 
   const focusNext = (index: number) => inputRefs.current[index + 1]?.focus();
   const focusPrev = (index: number) => inputRefs.current[index - 1]?.focus();
@@ -268,8 +268,6 @@ function OtpForm({
         return;
       }
       onNewToken(data.pendingToken);
-      setDigits(Array(OTP_LENGTH).fill(""));
-      inputRefs.current[0]?.focus();
     } catch {
       setError("שגיאה בחיבור לשרת");
     } finally {
@@ -390,6 +388,7 @@ export default function SignupPage() {
           </>
         ) : (
           <OtpForm
+            key={pendingToken}
             email={email}
             pendingToken={pendingToken}
             signupPayload={signupPayload}

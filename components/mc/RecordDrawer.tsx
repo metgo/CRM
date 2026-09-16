@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CollName, Rec } from "@/lib/mc/store";
 import { getRec, remove, rows, save } from "@/lib/mc/store";
-import { SCHEMA, disp, nameOf } from "@/lib/mc/schema";
+import { SCHEMA, nameOf } from "@/lib/mc/schema";
 import type { Field } from "@/lib/mc/schema";
 import { L, t } from "@/lib/mc/i18n";
-import { enumLabel } from "@/lib/mc/enums";
 import { fmtDate, fmtN, ils, daysAgo, dayWord } from "@/lib/mc/format";
 import { gapDays, isStuck, lastContactDays, overdue, paceOf, progressOf, quoteNet, redeemedPct, stageSla, vatRate } from "@/lib/mc/compute";
 import { getSettings } from "@/lib/mc/store";
@@ -80,48 +79,48 @@ function computedRows(coll: CollName, r: Rec): Array<[string, React.ReactNode]> 
     const sla = stageSla(r.stage);
     if (n != null && sla) {
       out.push([t("daysInStage"), isStuck(r)
-        ? <Pill tone="p-dan"><span className="num">{`${n} / ${sla}`}</span></Pill>
-        : <span className="num">{`${n} / ${sla}`}</span>]);
+        ? <Pill key="daysInStage" tone="p-dan"><span className="num">{`${n} / ${sla}`}</span></Pill>
+        : <span key="daysInStage" className="num">{`${n} / ${sla}`}</span>]);
     }
     const g = gapDays(r);
     if (g != null) {
       out.push([t("verbalGap"),
-        <Pill tone={g <= s.gapOk ? "p-ok" : g <= s.gapWarn ? "p-warn" : "p-dan"}>{`${g} ${t("days")}`}</Pill>]);
+        <Pill key="verbalGap" tone={g <= s.gapOk ? "p-ok" : g <= s.gapWarn ? "p-warn" : "p-dan"}>{`${g} ${t("days")}`}</Pill>]);
     }
     if (r.net) {
-      out.push([t("vat"), <span className="num">{ils(Number(r.net) * vatRate())}</span>]);
-      out.push([t("gross"), <span className="num">{ils(Number(r.net) * (1 + vatRate()))}</span>]);
+      out.push([t("vat"), <span key="vat" className="num">{ils(Number(r.net) * vatRate())}</span>]);
+      out.push([t("gross"), <span key="gross" className="num">{ils(Number(r.net) * (1 + vatRate()))}</span>]);
       if (r.commissionPct) {
-        out.push([t("commission"), <span className="num">{ils((Number(r.net) * Number(r.commissionPct)) / 100)}</span>]);
+        out.push([t("commission"), <span key="commission" className="num">{ils((Number(r.net) * Number(r.commissionPct)) / 100)}</span>]);
       }
     }
     if (!r.next && !["won", "lost"].includes(r.stage)) {
-      out.push([t("nextAction"), <Pill tone="p-warn">{t("notSet")}</Pill>]);
+      out.push([t("nextAction"), <Pill key="nextAction" tone="p-warn">{t("notSet")}</Pill>]);
     }
   }
   if (coll === "payments") {
     const net = Number(r.net) || 0;
-    out.push([t("vat"), <span className="num">{ils(net * vatRate())}</span>]);
-    out.push([t("gross"), <span className="num">{ils(net * (1 + vatRate()))}</span>]);
+    out.push([t("vat"), <span key="vat" className="num">{ils(net * vatRate())}</span>]);
+    out.push([t("gross"), <span key="gross" className="num">{ils(net * (1 + vatRate()))}</span>]);
     const o = overdue(r);
-    if (o) out.push([L({ he: "ימי פיגור", en: "Days overdue" }), <Pill tone={o > 60 ? "p-dan" : "p-warn"}>{o}</Pill>]);
+    if (o) out.push([L({ he: "ימי פיגור", en: "Days overdue" }), <Pill key="overdue" tone={o > 60 ? "p-dan" : "p-warn"}>{o}</Pill>]);
   }
   if (coll === "quotes") {
     const n = quoteNet(r);
-    out.push([t("subtotal"), <span className="num">{ils(n)}</span>]);
-    out.push([t("vat"), <span className="num">{ils(n * vatRate())}</span>]);
-    out.push([t("totalIncl"), <span className="num">{ils(n * (1 + vatRate()))}</span>]);
+    out.push([t("subtotal"), <span key="subtotal" className="num">{ils(n)}</span>]);
+    out.push([t("vat"), <span key="vat" className="num">{ils(n * vatRate())}</span>]);
+    out.push([t("totalIncl"), <span key="totalIncl" className="num">{ils(n * (1 + vatRate()))}</span>]);
   }
   if (coll === "campaigns") {
     const p = progressOf(r);
     const pc = paceOf(r);
-    out.push([t("progress"), <><span className="num">{`${Math.round(p)}%`}</span> <Meter pct={p} width={80} /></>]);
-    if (pc != null) out.push([t("pace"), <Pill tone={pc < 0.7 ? "p-dan" : pc < 0.95 ? "p-warn" : "p-ok"}>{pc.toFixed(2)}</Pill>]);
+    out.push([t("progress"), <span key="progress"><span className="num">{`${Math.round(p)}%`}</span> <Meter pct={p} width={80} /></span>]);
+    if (pc != null) out.push([t("pace"), <Pill key="pace" tone={pc < 0.7 ? "p-dan" : pc < 0.95 ? "p-warn" : "p-ok"}>{pc.toFixed(2)}</Pill>]);
   }
   if (coll === "batches") {
     out.push([L({ he: "שווי נקוב כולל", en: "Total face value" }),
-      <span className="num">{ils((Number(r.issued) || 0) * (Number(r.face) || 0))}</span>]);
-    out.push([L({ he: "אחוז מימוש", en: "Redeemed %" }), <span className="num">{`${redeemedPct(r)}%`}</span>]);
+      <span key="faceValue" className="num">{ils((Number(r.issued) || 0) * (Number(r.face) || 0))}</span>]);
+    out.push([L({ he: "אחוז מימוש", en: "Redeemed %" }), <span key="redeemedPct" className="num">{`${redeemedPct(r)}%`}</span>]);
   }
   if (coll === "clients") {
     const lc = lastContactDays(r.id);
@@ -143,24 +142,13 @@ export function RecordDrawer({
   const schema = coll ? SCHEMA[coll] : null;
   const record = coll && id ? getRec(coll, id) : undefined;
 
+  // Parent keys this component by `${coll}:${id}`, so switching records
+  // remounts it and these initializers naturally re-run — no effect needed.
   const [mode, setMode] = useState<"view" | "edit">(id ? "view" : "edit");
   const [tab, setTab] = useState(0);
-  const [draft, setDraft] = useState<Rec>({});
+  const [draft, setDraft] = useState<Rec>(() => (id || !schema ? {} : defaults(schema.fields)));
   const [errors, setErrors] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!coll || !schema) return;
-    setTab(0);
-    setErrors(new Set());
-    if (id) {
-      setMode("view");
-      setDraft({});
-    } else {
-      setMode("edit");
-      setDraft(defaults(schema.fields));
-    }
-  }, [coll, id]);
 
   const related = useMemo(() => {
     if (!schema || !record) return [];
@@ -171,7 +159,7 @@ export function RecordDrawer({
         ? rows(rc).filter((x) => (x.contacts || []).includes(record.id))
         : rows(rc).filter((x) => x[key] === record.id)
     }));
-  }, [schema, record, target]);
+  }, [schema, record]);
 
   if (!coll || !schema) {
     return <><div className="scrim" /><aside className="drawer" aria-hidden="true" /></>;

@@ -217,6 +217,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {target ? (
           <RecordDrawer
+            key={`${target.coll}:${target.id ?? "new"}`}
             target={target}
             onClose={() => setTarget(null)}
             onOpen={setTarget}
