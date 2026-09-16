@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { createHash, randomBytes } from "crypto";
 import { cookies, headers } from "next/headers";
 import { getRepository, Profile, Organization, AuthToken, AuthEvent } from "@/lib/db";
@@ -15,7 +16,7 @@ const TOKEN_EXPIRY = "7d";
 const COOKIE_NAME = "auth_token";
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
 const RESET_RESEND_INTERVAL_MS = 60 * 1000; // 60s
-const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const MAX_FAILED_LOGIN_ATTEMPTS = 8;
 
 export interface JWTPayload {
   userId: string;
@@ -24,6 +25,55 @@ export interface JWTPayload {
   role: string;
   tokenVersion: number;
 }
+
+// ------------------------------------------------------------- input schemas
+
+const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email("Invalid email address"));
+const newPasswordSchema = z.string().min(8, "Password must be at least 8 characters");
+const nonEmptyString = z.string().trim().min(1, "Required");
+
+const signInSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, "Password is required"),
+});
+
+const requestPasswordResetSchema = z.object({
+  email: emailSchema,
+});
+
+const resetPasswordSchema = z.object({
+  token: nonEmptyString,
+  newPassword: newPasswordSchema,
+});
+
+const requestSignupOtpSchema = z.object({
+  fullName: nonEmptyString,
+  email: emailSchema,
+  password: newPasswordSchema,
+  organizationName: z.string().trim().min(1).optional(),
+});
+
+const verifySignupOtpSchema = z.object({
+  pendingToken: nonEmptyString,
+  otp: z.string().trim().regex(/^\d{6}$/, "OTP must be 6 digits"),
+});
+
+const createTeamMemberSchema = z.object({
+  organizationId: nonEmptyString,
+  fullName: nonEmptyString,
+  email: emailSchema,
+  role: z.enum(["superadmin", "agent"]),
+});
+
+const updateTeamMemberSchema = z.object({
+  fullName: nonEmptyString.optional(),
+  email: emailSchema.optional(),
+  role: z.enum(["superadmin", "agent"]).optional(),
+});
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
@@ -149,8 +199,12 @@ async function logAuthEvent(params: {
     });
     await eventRepo.save(event);
   } catch (error) {
-    console.error("Failed to log auth event:", error);
+    console.error("logAuthEvent error:", error);
   }
+}
+
+function firstIssueMessage(result: z.ZodSafeParseResult<unknown>): string {
+  return !result.success ? (result.error.issues[0]?.message ?? "Invalid input") : "Invalid input";
 }
 
 // ------------------------------------------------------------- reset/verify tokens
@@ -192,8 +246,11 @@ async function consumeAuthToken(raw: string, purpose: AuthTokenPurpose): Promise
  * this can't be used to enumerate registered emails.
  */
 export async function requestPasswordReset(email: string): Promise<void> {
+  const parsed = requestPasswordResetSchema.safeParse({ email });
+  if (!parsed.success) return; // malformed input can't match an account either
+
   const profileRepo = await getRepository(Profile);
-  const user = await profileRepo.findOne({ where: { email: email.toLowerCase() } });
+  const user = await profileRepo.findOne({ where: { email: parsed.data.email } });
   if (!user) return;
 
   // Silently drop rapid repeats instead of surfacing an error — the response
@@ -222,7 +279,10 @@ export async function resetPassword(
   token: string,
   newPassword: string
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const record = await consumeAuthToken(token, "password_reset");
+  const parsed = resetPasswordSchema.safeParse({ token, newPassword });
+  if (!parsed.success) return { success: false, error: firstIssueMessage(parsed) };
+
+  const record = await consumeAuthToken(parsed.data.token, "password_reset");
   if (!record) return { success: false, error: "Invalid or expired reset link" };
 
   const profileRepo = await getRepository(Profile);
@@ -269,9 +329,13 @@ export async function requestSignupOtp(
   | { success: true; pendingToken: string }
   | { success: false; error: string; code?: "rate_limited" }
 > {
+  const parsed = requestSignupOtpSchema.safeParse({ fullName, email, password, organizationName });
+  if (!parsed.success) return { success: false, error: firstIssueMessage(parsed) };
+  ({ fullName, email, password, organizationName } = parsed.data);
+
   try {
     const profileRepo = await getRepository(Profile);
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email;
 
     const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
     if (existing) return { success: false, error: "Email already in use" };
@@ -334,6 +398,10 @@ export async function verifySignupOtp(
   pendingToken: string,
   otp: string
 ): Promise<{ success: true; token: string } | { success: false; error: string }> {
+  const parsed = verifySignupOtpSchema.safeParse({ pendingToken, otp });
+  if (!parsed.success) return { success: false, error: firstIssueMessage(parsed) };
+  ({ pendingToken, otp } = parsed.data);
+
   let pending: PendingSignupPayload;
   try {
     pending = jwt.verify(pendingToken, OTP_PENDING_SECRET) as PendingSignupPayload;
@@ -397,9 +465,13 @@ export async function signIn(
   | { success: true; token: string }
   | { success: false; error: string; code?: "locked" }
 > {
+  const parsed = signInSchema.safeParse({ email, password });
+  if (!parsed.success) return { success: false, error: "Invalid credentials" };
+  ({ email, password } = parsed.data);
+
   try {
     const profileRepo = await getRepository(Profile);
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email;
     const user = await profileRepo.findOne({ where: { email: normalizedEmail } });
 
     if (!user) {
@@ -450,7 +522,7 @@ export async function signIn(
 
     return { success: true, token };
   } catch (error) {
-    console.error("Sign in error:", error);
+    console.error("signIn error:", error);
     return { success: false, error: "Authentication failed" };
   }
 }
@@ -501,8 +573,12 @@ export async function createTeamMember(
   email: string,
   role: UserRole
 ): Promise<{ success: true; member: TeamMember } | { success: false; error: string }> {
+  const parsed = createTeamMemberSchema.safeParse({ organizationId, fullName, email, role });
+  if (!parsed.success) return { success: false, error: firstIssueMessage(parsed) };
+  ({ organizationId, fullName, email, role } = parsed.data);
+
   const profileRepo = await getRepository(Profile);
-  const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = email;
 
   const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
   if (existing) return { success: false, error: "Email already in use" };
@@ -539,12 +615,16 @@ export async function updateTeamMember(
   id: string,
   data: { fullName?: string; email?: string; role?: UserRole }
 ): Promise<{ success: true; member: TeamMember } | { success: false; error: string }> {
+  const parsedData = updateTeamMemberSchema.safeParse(data);
+  if (!parsedData.success) return { success: false, error: firstIssueMessage(parsedData) };
+  data = parsedData.data;
+
   const profileRepo = await getRepository(Profile);
   const profile = await profileRepo.findOne({ where: { id, organizationId } });
   if (!profile) return { success: false, error: "Not found" };
 
   if (data.email !== undefined) {
-    const normalizedEmail = data.email.toLowerCase();
+    const normalizedEmail = data.email;
     if (normalizedEmail !== profile.email) {
       const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
       if (existing) return { success: false, error: "Email already in use" };
