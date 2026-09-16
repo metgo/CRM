@@ -7,9 +7,10 @@ import { MC_REGISTRY, isMcCollection } from "./registry";
 
 const READ_ONLY_KEYS = new Set(["id", "createdAt", "updatedAt"]);
 
-// Settings (org parameters + the team directory) are gated to superadmins;
-// every other mc collection stays open to any authenticated org member.
-const SUPERADMIN_ONLY = new Set(["settings", "users"]);
+// Settings (org parameters) is gated to superadmins; every other mc
+// collection handled generically stays open to any authenticated org member.
+// ("users" is handled separately, outside this generic path — see team.ts.)
+const SUPERADMIN_ONLY = new Set(["settings"]);
 
 function forbiddenIfNotSuperadmin(coll: string, role: string): NextResponse | null {
   if (SUPERADMIN_ONLY.has(coll) && role !== "superadmin") {

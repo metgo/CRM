@@ -31,6 +31,27 @@ export function passwordResetEmail(resetLink: string): { subject: string; html: 
   };
 }
 
+export function teamInviteEmail(
+  email: string,
+  tempPassword: string,
+  loginLink: string,
+  orgName: string
+): { subject: string; html: string } {
+  return {
+    subject: `You've been added to ${orgName} on MetGo CRM`,
+    html: layout(
+      "Your MetGo CRM account is ready",
+      `<p>You've been added to <b>${orgName}</b> on MetGo CRM. Here are your sign-in details:</p>
+       <p style="background:#f4f4f4;border-radius:8px;padding:16px 24px;margin:24px 0;">
+         Email: <b>${email}</b><br/>
+         Temporary password: <b style="letter-spacing:1px;">${tempPassword}</b>
+       </p>
+       ${button(loginLink, "Log in")}
+       <p style="color:#888;font-size:13px;">We recommend changing this password after you log in, using "Forgot password" from the login page.</p>`
+    ),
+  };
+}
+
 export function signupOtpEmail(otp: string): { subject: string; html: string } {
   return {
     subject: "Your MetGo CRM verification code",

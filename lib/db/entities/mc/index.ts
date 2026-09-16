@@ -1,4 +1,3 @@
-export { AppUser } from "./AppUser";
 export { Cluster } from "./Cluster";
 export { Deal } from "./Deal";
 export { Tender } from "./Tender";
@@ -16,7 +15,6 @@ export { CrmEvent } from "./CrmEvent";
 export { Automation } from "./Automation";
 export { McSettings } from "./McSettings";
 
-import { AppUser } from "./AppUser";
 import { Cluster } from "./Cluster";
 import { Deal } from "./Deal";
 import { Tender } from "./Tender";
@@ -36,7 +34,7 @@ import { McSettings } from "./McSettings";
 
 /** All metgo-crm entity classes, for DataSource registration. */
 export const MC_ENTITIES = [
-  AppUser, Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
+  Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
   VoucherBatch, Merchant, Redemption, Partner, Interaction, Task, CrmEvent,
   Automation, McSettings,
 ];

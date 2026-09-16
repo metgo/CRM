@@ -1,18 +1,19 @@
 import type { EntityTarget, ObjectLiteral } from "typeorm";
 import {
-  AppUser, Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
+  Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
   VoucherBatch, Merchant, Redemption, Partner, Interaction, Task, CrmEvent,
   Automation, McSettings, Client, Contact,
 } from "@/lib/db";
 
 /**
  * metgo-crm collection name (as used by lib/mc/store.ts) -> TypeORM entity.
- * `clients` / `contacts` reuse CRM's own (now bilingual) tables; `users` is the
- * standalone `app_users` team directory; `batches` -> voucher_batches;
- * `settings` -> mc_settings.
+ * `clients` / `contacts` reuse CRM's own (now bilingual) tables; `batches` ->
+ * voucher_batches; `settings` -> mc_settings. `users` is deliberately NOT
+ * here — it's backed by `profiles` (real logins) via lib/mc/server/team.ts,
+ * not the generic handler, since Profile carries passwordHash/tokenVersion
+ * that must never round-trip through a generic body-driven read/write.
  */
 export const MC_REGISTRY: Record<string, EntityTarget<ObjectLiteral>> = {
-  users: AppUser,
   clients: Client,
   clusters: Cluster,
   contacts: Contact,

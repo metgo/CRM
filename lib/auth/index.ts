@@ -3,9 +3,9 @@ import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
 import { cookies, headers } from "next/headers";
 import { getRepository, Profile, Organization, AuthToken, AuthEvent } from "@/lib/db";
-import type { AuthTokenPurpose, AuthEventType } from "@/lib/db";
+import type { AuthTokenPurpose, AuthEventType, UserRole } from "@/lib/db";
 import { sendEmail } from "@/lib/email/send";
-import { passwordResetEmail, signupOtpEmail } from "@/lib/email/templates";
+import { passwordResetEmail, signupOtpEmail, teamInviteEmail } from "@/lib/email/templates";
 
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
@@ -453,5 +453,140 @@ export async function signIn(
     console.error("Sign in error:", error);
     return { success: false, error: "Authentication failed" };
   }
+}
+
+// ------------------------------------------------------------------- team
+
+/** Safe projection of a Profile — never includes passwordHash/tokenVersion/failedLoginAttempts. */
+export type TeamMember = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  emailVerified: boolean;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+};
+
+function toTeamMember(p: Profile): TeamMember {
+  return {
+    id: p.id,
+    fullName: p.fullName,
+    email: p.email,
+    role: p.role,
+    emailVerified: p.emailVerified,
+    lastLoginAt: p.lastLoginAt,
+    createdAt: p.createdAt,
+  };
+}
+
+function generateTempPassword(): string {
+  // URL-safe (no quoting/typo-prone symbols), 12 chars, ~72 bits of entropy.
+  return randomBytes(9).toString("base64url");
+}
+
+export async function listTeamMembers(organizationId: string): Promise<TeamMember[]> {
+  const profileRepo = await getRepository(Profile);
+  const rows = await profileRepo.find({ where: { organizationId }, order: { createdAt: "DESC" } });
+  return rows.map(toTeamMember);
+}
+
+/**
+ * Superadmin-initiated: provisions a real login for a teammate (rather than
+ * an invite-and-accept flow) and emails them the credentials directly.
+ */
+export async function createTeamMember(
+  organizationId: string,
+  fullName: string,
+  email: string,
+  role: UserRole
+): Promise<{ success: true; member: TeamMember } | { success: false; error: string }> {
+  const profileRepo = await getRepository(Profile);
+  const normalizedEmail = email.toLowerCase();
+
+  const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
+  if (existing) return { success: false, error: "Email already in use" };
+
+  const orgRepo = await getRepository(Organization);
+  const organization = await orgRepo.findOne({ where: { id: organizationId } });
+  if (!organization) return { success: false, error: "Organization not found" };
+
+  const tempPassword = generateTempPassword();
+  const profile = profileRepo.create({
+    organizationId,
+    fullName,
+    email: normalizedEmail,
+    passwordHash: await hashPassword(tempPassword),
+    role,
+    emailVerified: true, // provisioned directly by a superadmin, not self-signed-up
+  });
+  await profileRepo.save(profile);
+
+  const { subject, html } = teamInviteEmail(normalizedEmail, tempPassword, `${appUrl()}/login`, organization.name);
+  await sendEmail({ to: normalizedEmail, subject, html });
+
+  await logAuthEvent({
+    eventType: "team_member_created",
+    profileId: profile.id,
+    organizationId,
+  });
+
+  return { success: true, member: toTeamMember(profile) };
+}
+
+export async function updateTeamMember(
+  organizationId: string,
+  id: string,
+  data: { fullName?: string; email?: string; role?: UserRole }
+): Promise<{ success: true; member: TeamMember } | { success: false; error: string }> {
+  const profileRepo = await getRepository(Profile);
+  const profile = await profileRepo.findOne({ where: { id, organizationId } });
+  if (!profile) return { success: false, error: "Not found" };
+
+  if (data.email !== undefined) {
+    const normalizedEmail = data.email.toLowerCase();
+    if (normalizedEmail !== profile.email) {
+      const existing = await profileRepo.findOne({ where: { email: normalizedEmail } });
+      if (existing) return { success: false, error: "Email already in use" };
+      profile.email = normalizedEmail;
+    }
+  }
+  if (data.fullName !== undefined) profile.fullName = data.fullName;
+  if (data.role !== undefined) profile.role = data.role;
+  await profileRepo.save(profile);
+
+  return { success: true, member: toTeamMember(profile) };
+}
+
+export async function deleteTeamMember(
+  organizationId: string,
+  actingProfileId: string,
+  id: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  if (id === actingProfileId) {
+    return { success: false, error: "You can't remove your own account" };
+  }
+
+  const profileRepo = await getRepository(Profile);
+  const profile = await profileRepo.findOne({ where: { id, organizationId } });
+  if (!profile) return { success: false, error: "Not found" };
+
+  if (profile.role === "superadmin") {
+    const otherSuperadmins = await profileRepo.count({ where: { organizationId, role: "superadmin" } });
+    if (otherSuperadmins <= 1) {
+      return { success: false, error: "Can't remove the last superadmin of an organization" };
+    }
+  }
+
+  await profileRepo.remove(profile);
+
+  await logAuthEvent({
+    eventType: "team_member_removed",
+    profileId: id,
+    organizationId,
+    metadata: { removedBy: actingProfileId },
+  });
+
+  return { success: true };
 }
 

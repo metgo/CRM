@@ -5,6 +5,10 @@ export type EnumOption = Bi & { cls?: string; sla?: number; prob?: number };
 export type EnumGroup = Record<string, EnumOption>;
 
 export const E: Record<string, EnumGroup> = {
+  userRole: {
+    superadmin: { he: "מנהל־על", en: "Superadmin", cls: "p-acc" },
+    agent: { he: "נציג", en: "Agent", cls: "p-mute" }
+  },
   clientType: {
     authority: { he: "רשות מקומית", en: "Local authority", cls: "p-acc" },
     cluster: { he: "אשכול", en: "Cluster", cls: "p-info" },

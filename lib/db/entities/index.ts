@@ -7,7 +7,7 @@ export { AuthEvent, type AuthEventType } from "./AuthEvent";
 
 // metgo-crm entities
 export {
-  AppUser, Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
+  Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
   VoucherBatch, Merchant, Redemption, Partner, Interaction, Task, CrmEvent,
   Automation, McSettings, MC_ENTITIES,
 } from "./mc";

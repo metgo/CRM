@@ -67,18 +67,16 @@ const Ref = ({ coll, id }: { coll: CollName; id?: string | null }) => <>{id ? na
 export const SCHEMA: Record<CollName, Schema> = {
   users: {
     group: "g_system", icon: "☺",
-    title: (r) => disp(r, "name"),
+    title: (r) => r.fullName || "—",
     fields: [
-      ...nameFields("שם", "Name"),
-      f("role", "text", "תפקיד", "Role"),
-      f("email", "text", "מייל", "Email"),
-      f("active", "bool", "פעיל", "Active", { def: true })
+      f("fullName", "text", "שם מלא", "Full name", { req: true }),
+      f("email", "text", "מייל", "Email", { req: true }),
+      f("role", "enum", "תפקיד", "Role", { e: "userRole", req: true, def: "agent" })
     ],
     cols: [
-      { h: { he: "שם", en: "Name" }, cell: (r) => <b>{disp(r, "name")}</b> },
-      { h: { he: "תפקיד", en: "Role" }, cell: (r) => r.role || "—" },
-      { h: { he: "מייל", en: "Email" }, cell: (r) => <span className="mono">{r.email || "—"}</span> },
-      { h: { he: "פעיל", en: "Active" }, cell: (r) => (r.active !== false ? <Pill tone="p-ok">✓</Pill> : <Pill>—</Pill>) }
+      { h: { he: "שם", en: "Name" }, cell: (r) => <b>{r.fullName || "—"}</b> },
+      { h: { he: "תפקיד", en: "Role" }, cell: (r) => <Pill group="userRole" value={r.role} /> },
+      { h: { he: "מייל", en: "Email" }, cell: (r) => <span className="mono">{r.email || "—"}</span> }
     ]
   },
 
