@@ -6,11 +6,9 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
 } from "typeorm";
 import type { Relation } from "typeorm";
 import { Organization } from "./Organization";
-import { Client } from "./Client";
 
 export type UserRole = "superadmin" | "agent";
 
@@ -55,7 +53,4 @@ export class Profile {
   @ManyToOne(() => Organization, "profiles")
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
-
-  @OneToMany(() => Client, "assignedTo")
-  assignedClients: Relation<Client[]>;
 }

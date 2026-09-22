@@ -54,7 +54,7 @@ export const disp = (r: Rec | undefined, base: string): string => {
   if (!r) return "—";
   const he = r[`${base}He`];
   const en = r[`${base}En`];
-  return (lang() === "he" ? he || en : en || he) || r[base] || "—";
+  return (lang() === "he" ? he || en : en || he) || "—";
 };
 
 export const nameOf = (coll: CollName, id?: string | null): string => {

@@ -10,10 +10,8 @@ import {
 } from "typeorm";
 import type { Relation } from "typeorm";
 import { Organization } from "./Organization";
-import { Client } from "./Client";
 
 @Entity("contacts")
-@Index(["clientId"])
 @Index(["organizationId"])
 export class Contact {
   @PrimaryGeneratedColumn("uuid")
@@ -22,18 +20,6 @@ export class Contact {
   @Column({ name: "organization_id", type: "uuid" })
   organizationId: string;
 
-  // DB column is nullable since AddMetgoCrm (mc contacts link via `links` jsonb).
-  @Column({ name: "client_id", type: "uuid", nullable: true })
-  clientId: string;
-
-  // DB columns are nullable since AddMetgoCrm; the mc API mirrors them from name_he.
-  @Column({ name: "first_name", type: "varchar", length: 100, nullable: true })
-  firstName: string;
-
-  @Column({ name: "last_name", type: "varchar", length: 100, nullable: true })
-  lastName: string;
-
-  // --- metgo-crm bilingual fields (all nullable, added by AddMetgoCrm migration) ---
   @Column({ name: "name_he", type: "text", nullable: true })
   nameHe: string | null;
 
@@ -51,7 +37,6 @@ export class Contact {
 
   @Column({ type: "boolean", default: true })
   active: boolean;
-  // --- end metgo-crm fields ---
 
   @Column({ name: "role_title", type: "varchar", length: 150, nullable: true })
   roleTitle: string | null;
@@ -83,8 +68,4 @@ export class Contact {
   @ManyToOne(() => Organization)
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
-
-  @ManyToOne(() => Client, "contacts")
-  @JoinColumn({ name: "client_id" })
-  client: Relation<Client>;
 }

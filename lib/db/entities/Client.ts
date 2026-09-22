@@ -6,13 +6,10 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
 import { Organization } from "./Organization";
-import { Profile } from "./Profile";
-import { Contact } from "./Contact";
 
 export type ClientStatus = "lead" | "active" | "negotiation" | "paused" | "closed";
 
@@ -27,12 +24,6 @@ export class Client {
   @Column({ name: "organization_id", type: "uuid" })
   organizationId: string;
 
-  // DB column is nullable since AddMetgoCrm; the mc API always mirrors it from
-  // name_he so CRM's own pages keep seeing a string.
-  @Column({ type: "varchar", length: 255, nullable: true })
-  name: string;
-
-  // --- metgo-crm bilingual / voucher-programme fields (all nullable, added by AddMetgoCrm migration) ---
   @Column({ name: "name_he", type: "text", nullable: true })
   nameHe: string | null;
 
@@ -68,7 +59,6 @@ export class Client {
 
   @Column({ type: "text", nullable: true })
   phone: string | null;
-  // --- end metgo-crm fields ---
 
   @Column({ type: "varchar", length: 50, default: "lead" })
   status: ClientStatus;
@@ -79,14 +69,8 @@ export class Client {
   @Column({ type: "text", nullable: true })
   address: string | null;
 
-  @Column({ type: "varchar", length: 500, nullable: true })
-  website: string | null;
-
   @Column({ type: "text", nullable: true })
   notes: string | null;
-
-  @Column({ name: "assigned_to", type: "uuid", nullable: true })
-  assignedToId: string | null;
 
   @Column({ name: "deleted_at", type: "timestamptz", nullable: true })
   deletedAt: Date | null;
@@ -100,11 +84,4 @@ export class Client {
   @ManyToOne(() => Organization, "clients")
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
-
-  @ManyToOne(() => Profile, "assignedClients", { nullable: true })
-  @JoinColumn({ name: "assigned_to" })
-  assignedTo: Relation<Profile> | null;
-
-  @OneToMany(() => Contact, "client")
-  contacts: Relation<Contact[]>;
 }

@@ -48,26 +48,6 @@ function deserialize(repo: Repository<ObjectLiteral>, body: Record<string, unkno
   return out;
 }
 
-/**
- * Keep the legacy CRM columns populated from the bilingual fields so CRM's own
- * clients/contacts pages keep working against mc-created rows.
- */
-function mirrorLegacyFields(coll: string, data: Record<string, unknown>): void {
-  const bi = (data.nameHe || data.nameEn) as string | undefined;
-  if (coll === "clients") {
-    if (bi && !data.name) data.name = bi;
-  }
-  if (coll === "contacts") {
-    if (bi && (data.firstName === undefined || data.firstName === null || data.firstName === "")) {
-      const parts = bi.trim().split(/\s+/);
-      data.firstName = parts.shift() || bi;
-      data.lastName = parts.join(" ") || "";
-    }
-    const links = Array.isArray(data.links) ? (data.links as Array<Record<string, unknown>>) : [];
-    if (!data.clientId && links[0]?.client) data.clientId = links[0].client;
-  }
-}
-
 function orderFor(repo: Repository<ObjectLiteral>): Record<string, "ASC" | "DESC"> {
   if (hasColumn(repo, "n")) return { n: "ASC" };
   if (hasColumn(repo, "createdAt")) return { createdAt: "DESC" };
@@ -104,7 +84,6 @@ export async function createInCollection(req: NextRequest, coll: string) {
 
   const data = deserialize(repo, await req.json());
   if (hasColumn(repo, "organizationId")) data.organizationId = auth.payload.organizationId;
-  mirrorLegacyFields(coll, data);
 
   // mc_settings is a singleton keyed by a text id
   if (coll === "settings") data.id = data.id ?? "main";
@@ -146,7 +125,6 @@ export async function updateOne(req: NextRequest, coll: string, id: string) {
   if (!repo) return NextResponse.json({ error: "Unknown collection" }, { status: 404 });
 
   const data = deserialize(repo, await req.json());
-  mirrorLegacyFields(coll, data);
 
   let row = await repo.findOne({ where: scopedWhere(repo, id, auth.payload.organizationId) });
   if (!row) {
