@@ -1,6 +1,6 @@
 /** Timezone automations run in. Reminders go out at SEND_HOUR local time. */
 export const TZ = process.env.AUTOMATIONS_TZ || "Asia/Jerusalem";
-export const SEND_HOUR = 9;
+export const SEND_HOUR = 12;
 
 /** Today's date in TZ, as YYYY-MM-DD. */
 export function todayIso(): string {

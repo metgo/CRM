@@ -6,6 +6,8 @@ export const QUEUES = {
   recordEvent: "record-event",
   /** One step of a payment's reminder schedule (rules 1–3). */
   paymentReminder: "payment-reminder",
+  /** One task reminder: day before, due date, or a day overdue (rule 19). */
+  taskReminder: "task-reminder",
 } as const;
 
 // Survives Next dev hot reloads, so we never open a second pool.
@@ -36,6 +38,14 @@ async function createBoss(): Promise<PgBoss> {
     policy: "exclusive",
     // reminders are queued up to ~2 months ahead; pg-boss's default would
     // delete a job still waiting after 14 days
+    retentionSeconds: 400 * 24 * 60 * 60,
+    retryLimit: 5,
+    retryDelay: 60,
+    retryBackoff: true,
+  });
+  await boss.createQueue(QUEUES.taskReminder, {
+    // one queued job per singletonKey (task + offset + due date)
+    policy: "exclusive",
     retentionSeconds: 400 * 24 * 60 * 60,
     retryLimit: 5,
     retryDelay: 60,

@@ -96,3 +96,54 @@ export function debtEscalationEmail(p: PaymentFacts, reminders: number, daysOver
     ),
   };
 }
+
+export type TaskFacts = {
+  title: string;
+  due: string;
+  priority: string | null;
+};
+
+const PRIORITY: Record<string, [string, string]> = {
+  low: ["נמוכה", "Low"], med: ["בינונית", "Medium"], high: ["גבוהה", "High"], urgent: ["דחוף", "Urgent"],
+};
+
+/** Rule 18 — internal: a task was assigned to you. */
+export function taskAssignedEmail(t: TaskFacts, assignedBy: string | null): Email {
+  const title = esc(t.title);
+  const [pHe, pEn] = PRIORITY[t.priority ?? ""] ?? ["", ""];
+  const byHe = assignedBy ? ` על ידי ${esc(assignedBy)}` : "";
+  const byEn = assignedBy ? ` by ${esc(assignedBy)}` : "";
+  return {
+    subject: `משימה חדשה: ${t.title}`,
+    html: layout(
+      "New task assigned to you",
+      bi(
+        `הוקצתה לך משימה${byHe}: <b>${title}</b><br/>יעד: ${date(t.due)}${pHe ? ` · עדיפות: ${pHe}` : ""}`,
+        `A task was assigned to you${byEn}: <b>${title}</b><br/>Due: ${date(t.due)}${pEn ? ` · Priority: ${pEn}` : ""}`
+      ) + button(appLink("/tasks"), "Open tasks")
+    ),
+  };
+}
+
+/** Rule 19 — internal: task due tomorrow, today, or overdue by `offset` days. */
+export function taskReminderEmail(t: TaskFacts, offset: number): Email {
+  const title = esc(t.title);
+  const [whenHe, whenEn, subj] =
+    offset < 0 ? ["מחר", "tomorrow", "מחר"]
+    : offset === 0 ? ["היום", "today", "היום"]
+    : [`באיחור של ${offset} ימים`, `${offset} days overdue`, `באיחור ${offset} ימים`];
+  return {
+    subject: `${offset > 0 ? "משימה באיחור" : "תזכורת משימה"} (${subj}): ${t.title}`,
+    html: layout(
+      offset > 0 ? "Task overdue" : "Task reminder",
+      bi(
+        offset > 0
+          ? `המשימה <b>${title}</b> ${whenHe} (יעד ${date(t.due)}) ועדיין לא הושלמה.`
+          : `המשימה <b>${title}</b> מגיעה ליעד ${whenHe}, ${date(t.due)}.`,
+        offset > 0
+          ? `<b>${title}</b> is ${whenEn} (due ${date(t.due)}) and not completed yet.`
+          : `<b>${title}</b> is due ${whenEn}, ${date(t.due)}.`
+      ) + button(appLink("/tasks"), "Open tasks")
+    ),
+  };
+}

@@ -2,7 +2,7 @@
 
 Background automations for the CRM: when a record is saved, the server can schedule work (emails, counter updates, status changes, tasks) and run it later at the right time, with no cron and no user action.
 
-Only **payment reminders (rules 1–4)** do anything right now. The pipeline is generic, so other rules plug in the same way (see [Adding a rule](#adding-a-rule)).
+Built so far: **payment reminders (rules 1–4)** and **task notifications (rules 18–19)**. The pipeline is generic, so other rules plug in the same way (see [Adding a rule](#adding-a-rule)).
 
 > Dashboard alerts (`lib/mc/alerts.ts`) are separate. They're worked out in the browser each time the page loads, only display, and don't use anything in this folder. The one link: switching a rule off on the Automations page hides its alerts **and** stops its background actions.
 
@@ -29,10 +29,12 @@ Only **payment reminders (rules 1–4)** do anything right now. The pipeline is 
  Worker (inside the Next server)         worker.ts, started by /instrumentation.ts
         │
         ├─ record-event     → dispatchRecordEvent()   subscribers.ts
-        │                        └─ payments → onPaymentEvent()   payments.ts
-        │                               └─ queues payment-reminder jobs for future dates
+        │                        ├─ payments → onPaymentEvent()   payments.ts
+        │                        └─ tasks    → onTaskEvent()      tasks.ts
+        │                               └─ send now (rule 18) and/or queue jobs for future dates
         │
-        └─ payment-reminder → runPaymentJob()          payments.ts
+        ├─ payment-reminder → runPaymentJob()          payments.ts
+        └─ task-reminder    → runTaskJob()             tasks.ts
                                  ├─ reload the record, re-check the conditions
                                  ├─ runOnce()  (dedupe via automation_log)   log.ts
                                  └─ send email / bump counter / create task
@@ -71,6 +73,23 @@ Saving a payment (on create, or when `due` or `status` changes) queues up to fiv
 
 ---
 
+## Task notifications (rules 18–19)
+
+| When | Rule | Runs only if | Action | Recipient |
+|---|---|---|---|---|
+| Immediately, when a task is created with an assignee or its assignee changes | 18 | task not done, and you didn't assign it to yourself | "New task assigned to you" email | the new assignee |
+| due − 1 day, 09:00 | 19 | task not done | "Due tomorrow" email | current assignee |
+| due date, 09:00 | 19 | task not done | "Due today" email | current assignee |
+| due + 1, then **every day** at 09:00 | 19 | task not done (stops after 30 days overdue) | "N days overdue" email | current assignee |
+
+- Rule 18 needs no schedule. It sends straight from the save event.
+- Rule 19's reminders go to whoever is assigned **when the reminder runs**, so reassigning a task moves its future reminders to the new person.
+- A task saved when it's **already overdue** starts its daily chain today; the reminders it "missed" aren't sent.
+- The overdue chain works by each overdue job queuing the next day's job. Marking the task done ends it.
+- A task with no assignee gets no reminders, but its jobs stay queued, so assigning someone later picks them up.
+
+---
+
 ## Files
 
 | File | What it does |
@@ -81,6 +100,7 @@ Saving a payment (on create, or when `due` or `status` changes) queues up to fiv
 | `subscribers.ts` | Which listeners run for which collection, like `addEventListener`. |
 | `worker.ts` | Connects each queue to its handler. |
 | `payments.ts` | Rules 1–4: scheduling, running jobs, debt escalation. |
+| `tasks.ts` | Rules 18–19: assignment email, due and overdue reminders. |
 | `emails.ts` | Email templates (internal ones in Hebrew and English, client-facing in Hebrew RTL). |
 | `lookup.ts` | DB lookups: is the rule on, `debtAfter`, org name, client, managers, owner, billing contact. |
 | `log.ts` | `runOnce()`: the send-once guard built on `automation_log`. |
@@ -178,26 +198,10 @@ A planned **daily sweep** (a recurring pg-boss schedule) would fix the first thr
 
 ## Adding a rule
 
-Example: rule 18, "task assigned → notify the assignee".
+Use the existing rules as templates. `tasks.ts` is the smallest: `notifyAssigned()` shows a rule that fires on save, and `scheduleTaskJobs()` / `runTaskJob()` show scheduled and repeating jobs.
 
-1. **Create `lib/automations/tasks.ts`** with a subscriber:
-   ```ts
-   export async function onTaskEvent(e: RecordEvent): Promise<void> {
-     if (!e.after || !e.changed.includes("assignee") || !e.after.assignee) return;
-     if (!(await isRuleOn(e.organizationId, 18))) return;
-     const to = await profile(e.organizationId, String(e.after.assignee));
-     if (!to) return;
-     await runOnce(
-       { organizationId: e.organizationId, rule: 18, coll: "tasks", recordId: e.id,
-         channel: "email", dedupeKey: `task:${e.id}:r18:${e.after.assignee}` },
-       async () => {
-         await sendEmail({ to: to.email, ...taskAssignedEmail(/* … */) });
-         return { status: "sent", detail: { to: to.email } };
-       }
-     );
-   }
-   ```
-2. **Register it** in `subscribers.ts`: `tasks: [onTaskEvent]`.
+1. **Create `lib/automations/<collection>.ts`** exporting a subscriber `on<Thing>Event(e: RecordEvent)`.
+2. **Register it** in `subscribers.ts`, e.g. `contracts: [onContractEvent]`.
 3. **If it needs scheduled jobs:** add a queue name to `QUEUES` and a `createQueue()` call in `boss.ts`, then a `boss.work()` handler in `worker.ts`. For jobs scheduled more than 14 days ahead, set `retentionSeconds`, because pg-boss deletes waiting jobs after 14 days by default.
 4. **Add the email template** to `emails.ts`.
 

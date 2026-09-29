@@ -1,5 +1,6 @@
 import type { RecordEvent } from "./events";
 import { onPaymentEvent } from "./payments";
+import { onTaskEvent } from "./tasks";
 
 /**
  * Reacts to a record event. Runs inside the worker, so it may throw to have
@@ -11,6 +12,7 @@ export type Subscriber = (event: RecordEvent) => Promise<void>;
 /** Subscribers per collection. Rules are wired in here as they are built. */
 const SUBSCRIBERS: Partial<Record<string, Subscriber[]>> = {
   payments: [onPaymentEvent], // rules 1–4
+  tasks: [onTaskEvent], // rules 18–19
 };
 
 export async function dispatchRecordEvent(event: RecordEvent): Promise<void> {

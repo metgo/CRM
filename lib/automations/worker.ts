@@ -2,6 +2,7 @@ import { getBoss, QUEUES } from "./boss";
 import type { RecordEvent } from "./events";
 import { runPaymentJob, type PaymentJob } from "./payments";
 import { dispatchRecordEvent } from "./subscribers";
+import { runTaskJob, type TaskJob } from "./tasks";
 
 const g = globalThis as unknown as { __mcWorkerStarted?: boolean };
 
@@ -21,6 +22,9 @@ export async function startAutomationWorker(): Promise<void> {
     });
     await boss.work<PaymentJob>(QUEUES.paymentReminder, async ([job]) => {
       await runPaymentJob(job.data);
+    });
+    await boss.work<TaskJob>(QUEUES.taskReminder, async ([job]) => {
+      await runTaskJob(job.data);
     });
     console.log("[automations] worker started");
   } catch (err) {
