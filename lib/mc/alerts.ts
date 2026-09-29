@@ -42,6 +42,11 @@ export function buildAlerts(): Alert[] {
         { titleHe: `לגבות חוב — ${client}`, titleEn: `Collect debt — ${client}`, domain: "collection", client: p.client, priority: "urgent", due: todayIso() });
     } else if (st === "late") {
       push(2, 3, `${D("תשלום באיחור", "Late payment")} · ${client}`, `${o} ${D("ימים", "days")}`, "payments", p.id);
+    } else if (st === "invoiced") {
+      if (daysTo(p.due) === 0) {
+        push(1, 2, `${D("תשלום ליום היעד", "Payment due today")} · ${client}`,
+          `${D("חשבונית הופקה, טרם שולם", "Invoiced, not yet paid")}`, "payments", p.id);
+      }
     } else if (st === "planned") {
       const d = daysTo(p.due);
       if (d != null && d >= 0 && d <= 7) {

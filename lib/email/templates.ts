@@ -1,7 +1,7 @@
 const BRAND_COLOR = "#0279b1";
 
-function layout(title: string, bodyHtml: string): string {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;border:1px solid #eee;">
+export function layout(title: string, bodyHtml: string, dir: "ltr" | "rtl" = "ltr"): string {
+  return `<div dir="${dir}" style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;border:1px solid #eee;">
     <div style="background:${BRAND_COLOR};padding:16px 24px;">
       <span style="color:#fff;font-size:18px;font-weight:bold;">MetGo</span>
     </div>
@@ -15,7 +15,7 @@ function layout(title: string, bodyHtml: string): string {
   </div>`;
 }
 
-function button(href: string, label: string): string {
+export function button(href: string, label: string): string {
   return `<p><a href="${href}" style="display:inline-block;background:${BRAND_COLOR};color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;">${label}</a></p>`;
 }
 

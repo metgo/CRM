@@ -37,7 +37,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  serverExternalPackages: ["typeorm", "pg", "reflect-metadata"],
+  serverExternalPackages: ["typeorm", "pg", "reflect-metadata", "pg-boss"],
 };
 
 export default nextConfig;

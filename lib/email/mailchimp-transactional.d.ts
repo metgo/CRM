@@ -5,6 +5,8 @@ declare module "@mailchimp/mailchimp_transactional" {
     to: Array<{ email: string; type?: "to" | "cc" | "bcc" }>;
     subject: string;
     html: string;
+    /** Show cc recipients to everyone instead of sending each a private copy. */
+    preserve_recipients?: boolean;
   }
 
   interface MailchimpTransactionalClient {

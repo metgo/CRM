@@ -19,13 +19,13 @@ function getClient(): ReturnType<typeof mailchimpTx> | null {
   return client;
 }
 
-export async function sendEmail(opts: { to: string; subject: string; html: string }): Promise<void> {
+export async function sendEmail(opts: { to: string; cc?: string[]; subject: string; html: string }): Promise<void> {
   const mc = getClient();
 
   if (!mc) {
     console.warn(
       `[email:dev] MAILCHIMP_TRANSACTIONAL_API_KEY not set — logging instead of sending.\n` +
-        `To: ${opts.to}\nSubject: ${opts.subject}\n${opts.html}`
+        `To: ${opts.to}${opts.cc?.length ? `\nCc: ${opts.cc.join(", ")}` : ""}\nSubject: ${opts.subject}\n${opts.html}`
     );
     return;
   }
@@ -34,7 +34,11 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
     message: {
       from_email: process.env.MAILCHIMP_FROM_EMAIL || "no-reply@metgo.app",
       from_name: "MetGo",
-      to: [{ email: opts.to, type: "to" }],
+      to: [
+        { email: opts.to, type: "to" },
+        ...(opts.cc ?? []).map((email) => ({ email, type: "cc" as const })),
+      ],
+      preserve_recipients: Boolean(opts.cc?.length),
       subject: opts.subject,
       html: opts.html,
     },

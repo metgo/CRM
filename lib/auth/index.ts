@@ -6,6 +6,7 @@ import { cookies, headers } from "next/headers";
 import { getRepository, Profile, Organization, AuthToken, AuthEvent } from "@/lib/db";
 import type { AuthTokenPurpose, AuthEventType, UserRole } from "@/lib/db";
 import { sendEmail } from "@/lib/email/send";
+import { seedOrgAutomations } from "@/lib/automations/seed";
 import { passwordResetEmail, signupOtpEmail, teamInviteEmail } from "@/lib/email/templates";
 
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
@@ -428,6 +429,12 @@ export async function verifySignupOtp(
     const orgRepo = await getRepository(Organization);
     const organization = orgRepo.create({ name: pending.organizationName });
     await orgRepo.save(organization);
+    try {
+      await seedOrgAutomations(organization.id);
+    } catch (err) {
+      // Non-fatal: the org just starts with no rules until they are re-seeded.
+      console.error("[signup] failed to seed automation rules", err);
+    }
 
     const profile = profileRepo.create({
       organizationId: organization.id,

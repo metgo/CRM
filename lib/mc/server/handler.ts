@@ -3,9 +3,12 @@ import { IsNull } from "typeorm";
 import type { Repository, ObjectLiteral } from "typeorm";
 import { getCurrentUser } from "@/lib/auth";
 import { getRepository } from "@/lib/db";
+import { publishRecordEvent } from "@/lib/automations/events";
 import { MC_REGISTRY, isMcCollection } from "./registry";
 
-const READ_ONLY_KEYS = new Set(["id", "createdAt", "updatedAt"]);
+// organizationId is always taken from the session, never from the body, so a
+// PUT can't move a record into another organization.
+const READ_ONLY_KEYS = new Set(["id", "organizationId", "createdAt", "updatedAt"]);
 
 // Settings (org parameters) is gated to superadmins; every other mc
 // collection handled generically stays open to any authenticated org member.
@@ -89,8 +92,13 @@ export async function createInCollection(req: NextRequest, coll: string) {
   if (coll === "settings") data.id = data.id ?? "main";
 
   const entity = repo.create(data);
-  const saved = await repo.save(entity);
-  return NextResponse.json(serialize(repo, saved as ObjectLiteral));
+  const saved = serialize(repo, (await repo.save(entity)) as ObjectLiteral);
+  await publishRecordEvent({
+    kind: "created", coll, id: String(saved.id),
+    organizationId: auth.payload.organizationId, userId: auth.payload.userId,
+    before: null, after: saved,
+  });
+  return NextResponse.json(saved);
 }
 
 // ------------------------------------------------------------------- single row
@@ -137,9 +145,15 @@ export async function updateOne(req: NextRequest, coll: string, id: string) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const before = serialize(repo, row);
   repo.merge(row, data);
-  const saved = await repo.save(row);
-  return NextResponse.json(serialize(repo, saved as ObjectLiteral));
+  const saved = serialize(repo, (await repo.save(row)) as ObjectLiteral);
+  await publishRecordEvent({
+    kind: "updated", coll, id,
+    organizationId: auth.payload.organizationId, userId: auth.payload.userId,
+    before, after: saved,
+  });
+  return NextResponse.json(saved);
 }
 
 export async function deleteOne(_req: NextRequest, coll: string, id: string) {
@@ -154,11 +168,17 @@ export async function deleteOne(_req: NextRequest, coll: string, id: string) {
   const row = await repo.findOne({ where: scopedWhere(repo, id, auth.payload.organizationId) });
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const before = serialize(repo, row);
   if (hasColumn(repo, "deletedAt")) {
     (row as Record<string, unknown>).deletedAt = new Date();
     await repo.save(row);
   } else {
     await repo.remove(row);
   }
+  await publishRecordEvent({
+    kind: "deleted", coll, id,
+    organizationId: auth.payload.organizationId, userId: auth.payload.userId,
+    before, after: null,
+  });
   return NextResponse.json({ success: true });
 }

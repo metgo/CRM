@@ -1,11 +1,19 @@
 import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
 
+/**
+ * One automation rule. Rows with `organizationId = null` are the template
+ * copied to each new organization (see lib/automations/seed.ts); `n` is
+ * unique per organization.
+ */
 @Entity("automations")
 export class Automation {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: "integer", unique: true })
+  @Column({ name: "organization_id", type: "uuid", nullable: true })
+  organizationId: string | null;
+
+  @Column({ type: "integer" })
   n: number;
 
   @Column({ name: "on", type: "boolean", default: true })

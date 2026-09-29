@@ -13,6 +13,7 @@ export { Interaction } from "./Interaction";
 export { Task } from "./Task";
 export { CrmEvent } from "./CrmEvent";
 export { Automation } from "./Automation";
+export { AutomationLog } from "./AutomationLog";
 export { McSettings } from "./McSettings";
 
 import { Cluster } from "./Cluster";
@@ -30,11 +31,12 @@ import { Interaction } from "./Interaction";
 import { Task } from "./Task";
 import { CrmEvent } from "./CrmEvent";
 import { Automation } from "./Automation";
+import { AutomationLog } from "./AutomationLog";
 import { McSettings } from "./McSettings";
 
 /** All metgo-crm entity classes, for DataSource registration. */
 export const MC_ENTITIES = [
   Cluster, Deal, Tender, Quote, Contract, Payment, Campaign,
   VoucherBatch, Merchant, Redemption, Partner, Interaction, Task, CrmEvent,
-  Automation, McSettings,
+  Automation, AutomationLog, McSettings,
 ];
