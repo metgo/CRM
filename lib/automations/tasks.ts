@@ -84,7 +84,7 @@ async function notifyAssigned(e: RecordEvent) {
 
 // ------------------------------------------------------------------ scheduling
 
-async function scheduleTaskJobs(organizationId: string, taskId: string, due: string, status: string) {
+export async function scheduleTaskJobs(organizationId: string, taskId: string, due: string, status: string) {
   if (!due || status === "done") return;
   const d = due.slice(0, 10);
   const today = todayIso();

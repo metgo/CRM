@@ -1,3 +1,4 @@
+import { onContractEvent } from "./contracts";
 import type { RecordEvent } from "./events";
 import { onPaymentEvent } from "./payments";
 import { onTaskEvent } from "./tasks";
@@ -13,6 +14,7 @@ export type Subscriber = (event: RecordEvent) => Promise<void>;
 const SUBSCRIBERS: Partial<Record<string, Subscriber[]>> = {
   payments: [onPaymentEvent], // rules 1–4
   tasks: [onTaskEvent], // rules 18–19
+  contracts: [onContractEvent], // rule 17
 };
 
 export async function dispatchRecordEvent(event: RecordEvent): Promise<void> {

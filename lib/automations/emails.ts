@@ -147,3 +147,47 @@ export function taskReminderEmail(t: TaskFacts, offset: number): Email {
     ),
   };
 }
+
+export type ContractSignedSummary = {
+  client: string;
+  po: string | null;
+  clientActivated: boolean;
+  payments: { label: string; due: string; net: string }[];
+  paymentsSkipped: string | null;
+  tasks: { title: string; due: string }[];
+};
+
+/** Rule 17 — internal: what the system did when a contract was signed. */
+export function contractSignedEmail(s: ContractSignedSummary): Email {
+  const client = esc(s.client);
+  const doc = s.po ? ` (${esc(s.po)})` : "";
+  const li = (items: string[]) => `<ul style="padding-inline-start:20px;">${items.map((i) => `<li>${i}</li>`).join("")}</ul>`;
+
+  const payHe = s.payments.length
+    ? `נוצרו ${s.payments.length} שורות תשלום:` + li(s.payments.map((p) => `${esc(p.label)} · ${money(p.net)} · ${date(p.due)}`))
+    : `לא נוצרו שורות תשלום${s.paymentsSkipped ? `: ${esc(s.paymentsSkipped)}` : ""}.`;
+  const payEn = s.payments.length
+    ? `${s.payments.length} payment rows created:` + li(s.payments.map((p) => `${esc(p.label)} · ${money(p.net)} · ${date(p.due)}`))
+    : `No payment rows created${s.paymentsSkipped ? `: ${esc(s.paymentsSkipped)}` : ""}.`;
+  const tasks = li(s.tasks.map((t) => `${esc(t.title)} · ${date(t.due)}`));
+
+  return {
+    subject: `חוזה נחתם · ${s.client}`,
+    html: layout(
+      "Contract signed",
+      `<div dir="rtl" style="text-align:right;">
+         <p>החוזה עם <b>${client}</b>${doc} סומן כחתום. המערכת ביצעה:</p>
+         ${s.clientActivated ? "<p>✓ הלקוח עודכן לסטטוס פעיל.</p>" : ""}
+         <p>✓ ${payHe}</p>
+         ${s.tasks.length ? `<p>✓ נפתחו ${s.tasks.length} משימות קליטה:</p>${tasks}` : ""}
+       </div>
+       <div style="color:#666;">
+         <p>The contract with <b>${client}</b>${doc} was marked signed. The system:</p>
+         ${s.clientActivated ? "<p>✓ Set the client to active.</p>" : ""}
+         <p>✓ ${payEn}</p>
+         ${s.tasks.length ? `<p>✓ Opened ${s.tasks.length} onboarding tasks.</p>` : ""}
+       </div>` + button(appLink("/payments"), "Open payments")
+    ),
+  };
+}
+

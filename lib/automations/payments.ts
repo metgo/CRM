@@ -64,7 +64,7 @@ export async function onPaymentEvent(e: RecordEvent): Promise<void> {
   }
 }
 
-async function schedulePaymentJobs(organizationId: string, paymentId: string, due: string, status: string) {
+export async function schedulePaymentJobs(organizationId: string, paymentId: string, due: string, status: string) {
   if (!due || status === "paid") return;
   const boss = await getBoss();
   const today = todayIso();
