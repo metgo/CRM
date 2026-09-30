@@ -6,16 +6,12 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
   Index,
 } from "typeorm";
 import type { Relation } from "typeorm";
 import { Organization } from "./Organization";
-import { Client } from "./Client";
-import { Communication } from "./Communication";
 
 @Entity("contacts")
-@Index(["clientId"])
 @Index(["organizationId"])
 export class Contact {
   @PrimaryGeneratedColumn("uuid")
@@ -24,14 +20,23 @@ export class Contact {
   @Column({ name: "organization_id", type: "uuid" })
   organizationId: string;
 
-  @Column({ name: "client_id", type: "uuid" })
-  clientId: string;
+  @Column({ name: "name_he", type: "text", nullable: true })
+  nameHe: string | null;
 
-  @Column({ name: "first_name", type: "varchar", length: 100 })
-  firstName: string;
+  @Column({ name: "name_en", type: "text", nullable: true })
+  nameEn: string | null;
 
-  @Column({ name: "last_name", type: "varchar", length: 100 })
-  lastName: string;
+  @Column({ type: "text", nullable: true })
+  mobile: string | null;
+
+  @Column({ type: "text", nullable: true })
+  channel: string | null;
+
+  @Column({ type: "jsonb", default: () => "'[]'" })
+  links: unknown;
+
+  @Column({ type: "boolean", default: true })
+  active: boolean;
 
   @Column({ name: "role_title", type: "varchar", length: 150, nullable: true })
   roleTitle: string | null;
@@ -63,11 +68,4 @@ export class Contact {
   @ManyToOne(() => Organization)
   @JoinColumn({ name: "organization_id" })
   organization: Relation<Organization>;
-
-  @ManyToOne(() => Client, "contacts")
-  @JoinColumn({ name: "client_id" })
-  client: Relation<Client>;
-
-  @OneToMany(() => Communication, "contact")
-  communications: Relation<Communication[]>;
 }

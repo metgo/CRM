@@ -20,6 +20,6 @@ VALUES (
   'Admin User',
   'admin@metgo.com',
   '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4K.XQ5fE9xvwXEAa', -- bcrypt("admin123")
-  'admin'
+  'superadmin'
 )
 ON CONFLICT DO NOTHING;

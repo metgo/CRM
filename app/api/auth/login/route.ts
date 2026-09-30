@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
     const result = await signIn(email, password);
 
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 401 });
+      const status = result.code === "locked" ? 423 : 401;
+      return NextResponse.json({ error: result.error }, { status });
     }
 
     const response = NextResponse.json({ success: true });

@@ -17,6 +17,7 @@ export async function GET() {
       fullName: user.fullName,
       role: user.role,
       organizationId: user.organizationId,
+      emailVerified: user.emailVerified,
     },
     payload,
   });
