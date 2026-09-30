@@ -8,20 +8,6 @@ import { schedulePaymentJobs } from "./payments";
 import { scheduleTaskJobs } from "./tasks";
 import { addDaysIso, todayIso } from "./time";
 
-/**
- * Contract signed — automation rule 17.
- *
- * When a contract's status becomes "signed", once per contract:
- *   1. the client is set to active (and "activated on" to today, if empty)
- *   2. payment rows are created from the contract's payment schedule, or one
- *      row for the contract amount when there is no schedule; skipped when the
- *      contract already has payments
- *   3. onboarding tasks are opened for the owner, only when this signature is
- *      what activated the client (a renewal or addendum for an existing
- *      active client gets none)
- * The new payments and tasks get their reminders scheduled (rules 1–4, 19),
- * and the owner gets one summary email.
- */
 
 /** Onboarding checklist opened on signature. `inDays` counts from today. */
 const ONBOARDING: { he: string; en: string; domain: string; priority: string; inDays: number }[] = [
