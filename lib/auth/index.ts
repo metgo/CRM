@@ -9,10 +9,16 @@ import { sendEmail } from "@/lib/email/send";
 import { seedOrgAutomations } from "@/lib/automations/seed";
 import { passwordResetEmail, signupOtpEmail, teamInviteEmail } from "@/lib/email/templates";
 
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
+// Resolved lazily so `next build` (which imports route modules with
+// NODE_ENV=production but no runtime secrets) doesn't fail.
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET environment variable is not set. Refusing to start in production.");
+  }
+  return "dev-only-secret-do-not-use-in-production";
 }
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production";
 const TOKEN_EXPIRY = "7d";
 const COOKIE_NAME = "auth_token";
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
@@ -88,12 +94,13 @@ export async function verifyPassword(
 }
 
 export function createToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
 }
 
 export function verifyToken(token: string): JWTPayload | null {
+  const secret = getJwtSecret();
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, secret) as JWTPayload;
   } catch {
     return null;
   }
@@ -306,7 +313,7 @@ export async function resetPassword(
 // ------------------------------------------------------------------- sign in/up
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const OTP_PENDING_SECRET = (process.env.JWT_SECRET ?? "dev-only-secret-do-not-use-in-production") + ":otp";
+const getOtpPendingSecret = () => getJwtSecret() + ":otp";
 const OTP_RESEND_INTERVAL_MS = 45 * 1000; //45 seconds
 
 export interface PendingSignupPayload {
@@ -374,7 +381,7 @@ export async function requestSignupOtp(
       exp: Math.floor((Date.now() + OTP_TTL_MS) / 1000),
     };
 
-    const pendingToken = jwt.sign(payload, OTP_PENDING_SECRET);
+    const pendingToken = jwt.sign(payload, getOtpPendingSecret());
 
     const { subject, html } = signupOtpEmail(otp);
     await sendEmail({ to: normalizedEmail, subject, html });
@@ -403,9 +410,10 @@ export async function verifySignupOtp(
   if (!parsed.success) return { success: false, error: firstIssueMessage(parsed) };
   ({ pendingToken, otp } = parsed.data);
 
+  const otpSecret = getOtpPendingSecret();
   let pending: PendingSignupPayload;
   try {
-    pending = jwt.verify(pendingToken, OTP_PENDING_SECRET) as PendingSignupPayload;
+    pending = jwt.verify(pendingToken, otpSecret) as PendingSignupPayload;
   } catch {
     return { success: false, error: "Verification session expired. Please sign up again." };
   }
