@@ -30,7 +30,9 @@ export async function sendEmail(opts: { to: string; cc?: string[]; subject: stri
     return;
   }
 
-  await mc.messages.send({
+  // The client resolves (not rejects) on API errors, and a 200 can still carry
+  // per-recipient rejections — check both so failures surface to callers.
+  const result: unknown = await mc.messages.send({
     message: {
       from_email: process.env.MAILCHIMP_FROM_EMAIL || "no-reply@metgo.app",
       from_name: "MetGo",
@@ -43,4 +45,15 @@ export async function sendEmail(opts: { to: string; cc?: string[]; subject: stri
       html: opts.html,
     },
   });
+
+  if (!Array.isArray(result)) {
+    const err = result as { message?: string; response?: { status?: number; data?: unknown } };
+    throw new Error(
+      `Mailchimp send failed (${err?.response?.status ?? "no status"}): ${JSON.stringify(err?.response?.data ?? err?.message ?? result)}`
+    );
+  }
+  const failed = result.filter((r: { status?: string }) => r.status === "rejected" || r.status === "invalid");
+  if (failed.length) {
+    throw new Error(`Mailchimp rejected email: ${JSON.stringify(failed)}`);
+  }
 }

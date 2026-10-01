@@ -27,6 +27,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/yarn.lock ./yarn.lock
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.env.local ./.env.local
 
 # Copy migration sources so the same image can run `yarn migration:run`
 # (ts-node is already present in node_modules from the builder's dev deps).
