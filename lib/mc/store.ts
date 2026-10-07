@@ -125,12 +125,26 @@ async function req(path: string, init?: RequestInit): Promise<any> {
 const loaded = new Set<CollName>();
 const pending = new Map<CollName, Promise<void>>();
 
+const etags: Partial<Record<CollName, string>> = {};
+
+async function fetchCollection(c: CollName): Promise<Rec[] | null> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const tag = etags[c];
+  if (tag) headers["If-None-Match"] = tag;
+  const res = await fetch(`${API}/${c}`, { headers });
+  if (res.status === 304) return null;
+  if (!res.ok) throw new Error(`${res.status}`);
+  const tagOut = res.headers.get("etag");
+  if (tagOut) etags[c] = tagOut;
+  return (await res.json()) as Rec[];
+}
+
 /** Fetch `c` once, in the background, deduping concurrent callers. No-op once loaded. */
 function ensureLoaded(c: CollName): void {
   if (loaded.has(c) || pending.has(c)) return;
-  const p = req(`/${c}`)
+  const p = fetchCollection(c)
     .then((data) => {
-      cache[c] = (data as Rec[]) || [];
+      if (data) cache[c] = data;
     })
     .catch((e) => {
       console.warn(`load ${c}:`, (e as Error).message);
@@ -145,9 +159,12 @@ function ensureLoaded(c: CollName): void {
 
 export async function reload(c: CollName): Promise<void> {
   try {
-    cache[c] = ((await req(`/${c}`)) as Rec[]) || [];
+    const data = await fetchCollection(c);
     loaded.add(c);
-    emit();
+    if (data) {
+      cache[c] = data;
+      emit();
+    }
   } catch (e) {
     console.warn(`reload ${c}:`, (e as Error).message);
   }

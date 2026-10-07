@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IsNull } from "typeorm";
 import type { Repository, ObjectLiteral } from "typeorm";
+import { createHash } from "crypto";
 import { getCurrentUser } from "@/lib/auth";
 import { getRepository } from "@/lib/db";
 import { publishRecordEvent } from "@/lib/automations/events";
@@ -59,7 +60,7 @@ function orderFor(repo: Repository<ObjectLiteral>): Record<string, "ASC" | "DESC
 
 // ------------------------------------------------------------------ collection
 
-export async function listCollection(_req: NextRequest, coll: string) {
+export async function listCollection(req: NextRequest, coll: string) {
   const auth = await getCurrentUser();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const forbidden = forbiddenIfNotSuperadmin(coll, auth.payload.role);
@@ -73,7 +74,13 @@ export async function listCollection(_req: NextRequest, coll: string) {
   if (hasColumn(repo, "organizationId")) where.organizationId = auth.payload.organizationId;
 
   const rows = await repo.find({ where, order: orderFor(repo) });
-  return NextResponse.json(rows.map((r) => serialize(repo, r)));
+  const body = rows.map((r) => serialize(repo, r));
+
+  const etag = `"${createHash("sha1").update(JSON.stringify(body)).digest("hex")}"`;
+  if (req.headers.get("if-none-match") === etag) {
+    return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+  }
+  return NextResponse.json(body, { headers: { ETag: etag } });
 }
 
 export async function createInCollection(req: NextRequest, coll: string) {
